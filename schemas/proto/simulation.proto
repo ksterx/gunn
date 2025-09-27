@@ -1,0 +1,278 @@
+syntax = "proto3";
+
+package gunn.simulation.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/your-org/gunn/proto/simulation/v1;simulationv1";
+option java_package = "com.yourorg.gunn.simulation.v1";
+option java_multiple_files = true;
+option csharp_namespace = "Gunn.Simulation.V1";
+
+// Core message types for Unity adapter communication
+
+// Intent submitted by an agent to perform an action
+message Intent {
+  // Type of intent
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_SPEAK = 1;
+    KIND_MOVE = 2;
+    KIND_INTERACT = 3;
+    KIND_CUSTOM = 4;
+  }
+
+  Kind kind = 1;                    // Type of intent
+  google.protobuf.Any payload = 2;  // Intent-specific data
+  int32 context_seq = 3;            // View sequence this intent is based on
+  string req_id = 4;                // Unique request identifier
+  string agent_id = 5;              // Agent submitting the intent
+  int32 priority = 6;               // Higher numbers = higher priority
+  string schema_version = 7;        // Semantic version (e.g., "1.0.0")
+}
+
+// Draft effect from external systems (Unity fills in uuid, global_seq, sim_time)
+message EffectDraft {
+  string kind = 1;                  // Type of effect
+  google.protobuf.Any payload = 2;  // Effect-specific data
+  string source_id = 3;             // System that generated this effect
+  string schema_version = 4;        // Semantic version
+}
+
+// Complete effect with all fields filled by Orchestrator
+message Effect {
+  string uuid = 1;                  // Unique ID for ordering tie-breaker
+  string kind = 2;                  // Type of effect
+  google.protobuf.Any payload = 3;  // Effect-specific data
+  int32 global_seq = 4;             // Global sequence number
+  double sim_time = 5;              // Simulation time
+  string source_id = 6;             // System that generated this effect
+  string schema_version = 7;        // Semantic version
+}
+
+// RFC6902 JSON Patch operations for incremental view updates
+message ObservationDelta {
+  int32 view_seq = 1;               // New view sequence number
+  repeated JsonPatch patches = 2;    // JSON Patch operations
+  string context_digest = 3;        // Hash digest of new view context
+  string schema_version = 4;        // Semantic version
+}
+
+// Single JSON Patch operation
+message JsonPatch {
+  enum Operation {
+    OPERATION_UNSPECIFIED = 0;
+    OPERATION_ADD = 1;
+    OPERATION_REMOVE = 2;
+    OPERATION_REPLACE = 3;
+    OPERATION_MOVE = 4;
+    OPERATION_COPY = 5;
+    OPERATION_TEST = 6;
+  }
+
+  Operation op = 1;                 // Patch operation type
+  string path = 2;                  // JSON Pointer path to target
+  google.protobuf.Any value = 3;    // Value for add/replace operations
+  string from = 4;                  // Source path for move/copy operations
+}
+
+// Agent's filtered view of the world state
+message View {
+  string agent_id = 1;              // Agent this view belongs to
+  int32 view_seq = 2;               // Sequence number of this view
+  google.protobuf.Any visible_entities = 3;      // Entities visible to agent
+  google.protobuf.Any visible_relationships = 4; // Relationships visible to agent
+  string context_digest = 5;        // Hash digest of view context
+}
+
+// Complete world state
+message WorldState {
+  google.protobuf.Any entities = 1;       // Map of entity_id to entity data
+  google.protobuf.Any relationships = 2;  // Map of entity_id to related entities
+  google.protobuf.Any spatial_index = 3;  // Map of entity_id to coordinates
+  google.protobuf.Any metadata = 4;       // Additional world metadata
+}
+
+// Unity-specific message types
+
+// Time tick event from Unity
+message TimeTick {
+  double sim_time = 1;              // Current simulation time
+  double delta_time = 2;            // Time since last tick
+  int32 frame_number = 3;           // Unity frame number
+}
+
+// Movement command to Unity
+message MoveCommand {
+  string entity_id = 1;             // Entity to move
+  Vector3 target_position = 2;      // Target position
+  float speed = 3;                  // Movement speed
+  bool use_pathfinding = 4;         // Whether to use Unity NavMesh
+}
+
+// Physics collision event from Unity
+message CollisionEvent {
+  string entity1 = 1;               // First colliding entity
+  string entity2 = 2;               // Second colliding entity
+  float impact_force = 3;           // Collision impact force
+  Vector3 position = 4;             // Collision position
+  Vector3 normal = 5;               // Collision normal vector
+}
+
+// 3D vector for positions, velocities, etc.
+message Vector3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+// Speaking action payload
+message SpeakPayload {
+  string text = 1;                  // Text to speak
+  string target_agent = 2;          // Target agent (empty for broadcast)
+  float volume = 3;                 // Speaking volume (0.0-1.0)
+  string emotion = 4;               // Emotional tone
+}
+
+// Movement action payload
+message MovePayload {
+  Vector3 target_position = 1;      // Where to move
+  float speed = 2;                  // Movement speed
+  bool run = 3;                     // Whether to run vs walk
+}
+
+// Interaction action payload
+message InteractPayload {
+  string target_entity = 1;         // Entity to interact with
+  string interaction_type = 2;      // Type of interaction
+  google.protobuf.Any parameters = 3; // Interaction-specific parameters
+}
+
+// Service definitions for Unity adapter
+
+// Unity adapter service for bidirectional communication
+service UnityAdapter {
+  // Submit intent from Unity to simulation core
+  rpc SubmitIntent(Intent) returns (IntentResponse);
+
+  // Emit effect from Unity to simulation core
+  rpc EmitEffect(EffectDraft) returns (EffectResponse);
+
+  // Stream observations from simulation core to Unity
+  rpc StreamObservations(ObservationRequest) returns (stream ObservationDelta);
+
+  // Get current view for an agent
+  rpc GetView(ViewRequest) returns (View);
+
+  // Cancel pending intent
+  rpc CancelIntent(CancelRequest) returns (CancelResponse);
+
+  // Health check
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+}
+
+// Request/Response message types
+
+message IntentResponse {
+  string req_id = 1;                // Request ID from original intent
+  string effect_id = 2;             // ID of created effect (if successful)
+  int32 global_seq = 3;             // Global sequence number
+  Status status = 4;                // Processing status
+  string message = 5;               // Human-readable status message
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_ACCEPTED = 1;
+    STATUS_REJECTED = 2;
+    STATUS_DEFERRED = 3;
+  }
+}
+
+message EffectResponse {
+  string effect_id = 1;             // ID of created effect
+  int32 global_seq = 2;             // Global sequence number
+  double sim_time = 3;              // Simulation time when processed
+  Status status = 4;                // Processing status
+  repeated string affected_agents = 5; // Agents that will receive observations
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_PROCESSED = 1;
+    STATUS_REJECTED = 2;
+    STATUS_DEFERRED = 3;
+  }
+}
+
+message ObservationRequest {
+  string world_id = 1;              // World identifier
+  string agent_id = 2;              // Agent identifier
+  int32 since_view_seq = 3;         // Only deltas since this sequence
+}
+
+message ViewRequest {
+  string world_id = 1;              // World identifier
+  string agent_id = 2;              // Agent identifier
+  bool include_full_view = 3;       // Include full view vs delta only
+}
+
+message CancelRequest {
+  string world_id = 1;              // World identifier
+  string agent_id = 2;              // Agent identifier
+  string req_id = 3;                // Request ID to cancel
+  string reason = 4;                // Cancellation reason
+}
+
+message CancelResponse {
+  string req_id = 1;                // Request ID that was cancelled
+  Status status = 2;                // Cancellation status
+  string message = 3;               // Human-readable message
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_CANCELLED = 1;
+    STATUS_NOT_FOUND = 2;
+    STATUS_ALREADY_COMPLETED = 3;
+  }
+}
+
+message HealthRequest {
+  // Empty request for health check
+}
+
+message HealthResponse {
+  Status status = 1;                // Health status
+  google.protobuf.Timestamp timestamp = 2; // Response timestamp
+  string version = 3;               // Service version
+  double uptime_seconds = 4;        // Service uptime
+
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_HEALTHY = 1;
+    STATUS_DEGRADED = 2;
+    STATUS_UNHEALTHY = 3;
+  }
+}
+
+// Error handling
+
+message Error {
+  int32 code = 1;                   // Numeric error code from docs/errors.md
+  string name = 2;                  // Error name constant
+  string message = 3;               // Human-readable error message
+  google.protobuf.Any details = 4;  // Structured error details
+  RecoveryAction recovery_action = 5; // Suggested recovery action
+  google.protobuf.Timestamp timestamp = 6; // When error occurred
+  string trace_id = 7;              // Distributed tracing ID
+
+  enum RecoveryAction {
+    RECOVERY_ACTION_UNSPECIFIED = 0;
+    RECOVERY_ACTION_RETRY = 1;
+    RECOVERY_ACTION_RETRY_WITH_DELAY = 2;
+    RECOVERY_ACTION_REGENERATE = 3;
+    RECOVERY_ACTION_MODIFY_INTENT = 4;
+    RECOVERY_ACTION_DEFER = 5;
+    RECOVERY_ACTION_SHED_OLDEST = 6;
+    RECOVERY_ACTION_ABORT = 7;
+  }
+}

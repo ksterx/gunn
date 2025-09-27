@@ -1,0 +1,861 @@
+openapi: 3.0.3
+info:
+  title: Gunn Multi-Agent Simulation API
+  description: |
+    REST API for the Gunn multi-agent simulation core system.
+
+    This API provides endpoints for agent observation, intent submission, and event emission
+    in a multi-agent simulation environment with partial observation and intelligent interruption.
+
+    ## Key Features
+    - Partial observation with distance and relationship filtering
+    - Concurrent agent execution with non-blocking operations
+    - Intelligent interruption and regeneration capabilities
+    - Event-driven architecture with deterministic ordering
+    - Complete audit trails and replay capabilities
+
+    ## Authentication
+    All endpoints require authentication via Bearer token or mTLS certificates.
+    Access is controlled per agent_id and world_id.
+
+    ## Error Handling
+    All errors follow the structured format defined in docs/errors.md with consistent
+    error codes, HTTP status mappings, and recovery action hints.
+
+    ## Schema Versioning
+    All message types include a schema_version field using semantic versioning.
+    Breaking changes require explicit version bumps and migration guidance.
+  version: 1.0.0
+  contact:
+    name: Gunn API Support
+    url: https://github.com/your-org/gunn
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.gunn.example.com/v1
+    description: Production server
+  - url: https://staging-api.gunn.example.com/v1
+    description: Staging server
+  - url: http://localhost:8000/v1
+    description: Local development server
+
+security:
+  - BearerAuth: []
+  - mTLS: []
+
+paths:
+  /worlds/{world_id}/agents/{agent_id}/observe:
+    get:
+      summary: Get agent's current observation
+      description: |
+        Retrieve the current observation for an agent, including their filtered view
+        of the world state and any pending observation deltas.
+
+        This endpoint implements the RL-style observation interface where agents
+        can poll for their current view of the world.
+      operationId: getObservation
+      tags:
+        - Observation
+      parameters:
+        - $ref: '#/components/parameters/WorldId'
+        - $ref: '#/components/parameters/AgentId'
+        - name: since_view_seq
+          in: query
+          description: Only return deltas since this view sequence number
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          example: 42
+        - name: include_full_view
+          in: query
+          description: Include full view even if deltas are available
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Current observation for the agent
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/View'
+                  - $ref: '#/components/schemas/ObservationDelta'
+              examples:
+                full_view:
+                  summary: Full view response
+                  value:
+                    agent_id: "agent_001"
+                    view_seq: 42
+                    visible_entities:
+                      entity1:
+                        type: "player"
+                        name: "Alice"
+                        position: [10.0, 20.0, 0.0]
+                    visible_relationships:
+                      entity1: ["entity2"]
+                    context_digest: "sha256:abc123def456"
+                delta_view:
+                  summary: Delta response
+                  value:
+                    view_seq: 43
+                    patches:
+                      - op: "replace"
+                        path: "/visible_entities/entity1/position"
+                        value: [11.0, 21.0, 0.0]
+                    context_digest: "sha256:def456abc789"
+                    schema_version: "1.0.0"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /worlds/{world_id}/agents/{agent_id}/intents:
+    post:
+      summary: Submit agent intent
+      description: |
+        Submit an intent for an agent to perform an action in the simulation.
+
+        This endpoint implements the two-phase commit pattern:
+        1. Validate intent against current world state
+        2. Create effect if validation passes
+
+        Includes idempotency checking via req_id and staleness detection.
+      operationId: submitIntent
+      tags:
+        - Intent
+      parameters:
+        - $ref: '#/components/parameters/WorldId'
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntentRequest'
+            examples:
+              speak_intent:
+                summary: Speaking intent
+                value:
+                  kind: "Speak"
+                  payload:
+                    text: "Hello, world!"
+                    target_agent: "agent_002"
+                  context_seq: 42
+                  req_id: "req_550e8400-e29b-41d4"
+                  priority: 1
+                  schema_version: "1.0.0"
+              move_intent:
+                summary: Movement intent
+                value:
+                  kind: "Move"
+                  payload:
+                    target_position: [15.0, 25.0, 0.0]
+                    speed: 2.5
+                  context_seq: 43
+                  req_id: "req_660f9511-f3ac-52e5"
+                  priority: 0
+                  schema_version: "1.0.0"
+      responses:
+        '201':
+          description: Intent accepted and effect created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntentResponse'
+              example:
+                req_id: "req_550e8400-e29b-41d4"
+                effect_id: "effect_770g0622-g4bd-63f6"
+                global_seq: 1001
+                status: "accepted"
+                message: "Intent processed successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /worlds/{world_id}/events:
+    post:
+      summary: Emit event to simulation
+      description: |
+        Emit an event that will be processed by the simulation core and
+        distributed to relevant agents based on their observation policies.
+
+        This endpoint is typically used by external adapters (Unity, Unreal)
+        to inject events into the simulation.
+      operationId: emitEvent
+      tags:
+        - Events
+      parameters:
+        - $ref: '#/components/parameters/WorldId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EffectDraft'
+            examples:
+              time_tick:
+                summary: Time tick from game engine
+                value:
+                  kind: "TimeTick"
+                  payload:
+                    sim_time: 123.456
+                    delta_time: 0.016
+                  source_id: "unity_adapter"
+                  schema_version: "1.0.0"
+              collision:
+                summary: Physics collision event
+                value:
+                  kind: "Collision"
+                  payload:
+                    entity1: "agent_001"
+                    entity2: "wall_003"
+                    impact_force: 15.7
+                    position: [10.5, 20.3, 0.0]
+                  source_id: "unity_adapter"
+                  schema_version: "1.0.0"
+      responses:
+        '201':
+          description: Event accepted and processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+              example:
+                effect_id: "effect_880h1733-h5ce-74g7"
+                global_seq: 1002
+                sim_time: 123.456
+                status: "processed"
+                affected_agents: ["agent_001", "agent_002"]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /worlds/{world_id}/agents/{agent_id}/stream:
+    get:
+      summary: WebSocket stream for real-time observations
+      description: |
+        Establish a WebSocket connection for real-time observation streaming.
+
+        The server will push ObservationDelta messages as they become available,
+        enabling low-latency agent interactions.
+
+        Connection upgrade to WebSocket protocol required.
+      operationId: streamObservations
+      tags:
+        - Streaming
+      parameters:
+        - $ref: '#/components/parameters/WorldId'
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '101':
+          description: WebSocket connection established
+          headers:
+            Upgrade:
+              schema:
+                type: string
+                enum: [websocket]
+            Connection:
+              schema:
+                type: string
+                enum: [Upgrade]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /worlds/{world_id}/agents/{agent_id}/cancel/{req_id}:
+    post:
+      summary: Cancel pending intent
+      description: |
+        Cancel a pending intent by request ID. This will trigger any associated
+        cancel tokens and halt ongoing generation processes.
+
+        Useful for implementing intelligent interruption when context becomes stale.
+      operationId: cancelIntent
+      tags:
+        - Intent
+      parameters:
+        - $ref: '#/components/parameters/WorldId'
+        - $ref: '#/components/parameters/AgentId'
+        - name: req_id
+          in: path
+          required: true
+          description: Request ID of the intent to cancel
+          schema:
+            type: string
+          example: "req_550e8400-e29b-41d4"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Reason for cancellation
+                  example: "Context became stale"
+      responses:
+        '200':
+          description: Intent cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  req_id:
+                    type: string
+                    example: "req_550e8400-e29b-41d4"
+                  status:
+                    type: string
+                    enum: [cancelled, not_found, already_completed]
+                    example: "cancelled"
+                  message:
+                    type: string
+                    example: "Intent cancelled successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Check the health status of the API service
+      operationId: healthCheck
+      tags:
+        - System
+      security: []  # No authentication required
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  uptime_seconds:
+                    type: number
+                    example: 3600.5
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for API authentication
+    mTLS:
+      type: mutualTLS
+      description: Mutual TLS certificate authentication
+
+  parameters:
+    WorldId:
+      name: world_id
+      in: path
+      required: true
+      description: Unique identifier for the simulation world
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9_-]+$'
+        minLength: 1
+        maxLength: 64
+      example: "world_001"
+
+    AgentId:
+      name: agent_id
+      in: path
+      required: true
+      description: Unique identifier for the agent
+      schema:
+        type: string
+        pattern: '^[a-zA-Z0-9_-]+$'
+        minLength: 1
+        maxLength: 64
+      example: "agent_001"
+
+  schemas:
+    View:
+      type: object
+      required:
+        - agent_id
+        - view_seq
+        - visible_entities
+        - visible_relationships
+        - context_digest
+      properties:
+        agent_id:
+          type: string
+          description: ID of the agent this view belongs to
+          minLength: 1
+          example: "agent_001"
+        view_seq:
+          type: integer
+          description: Sequence number of this view
+          minimum: 0
+          example: 42
+        visible_entities:
+          type: object
+          description: Entities visible to this agent
+          additionalProperties: true
+          example:
+            entity1:
+              type: "player"
+              name: "Alice"
+              position: [10.0, 20.0, 0.0]
+        visible_relationships:
+          type: object
+          description: Relationships visible to this agent
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            entity1: ["entity2"]
+        context_digest:
+          type: string
+          description: Hash digest of the view context
+          minLength: 1
+          example: "sha256:abc123def456"
+
+    ObservationDelta:
+      type: object
+      required:
+        - view_seq
+        - patches
+        - context_digest
+        - schema_version
+      properties:
+        view_seq:
+          type: integer
+          description: New view sequence number
+          minimum: 0
+          example: 43
+        patches:
+          type: array
+          description: RFC6902 JSON Patch operations
+          items:
+            type: object
+            required:
+              - op
+              - path
+            properties:
+              op:
+                type: string
+                enum: [add, remove, replace, move, copy, test]
+                description: JSON Patch operation type
+              path:
+                type: string
+                description: JSON Pointer path to the target location
+                pattern: '^(/[^/~]*(~[01][^/~]*)*)*$'
+              value:
+                description: Value for add/replace operations
+              from:
+                type: string
+                description: Source path for move/copy operations
+                pattern: '^(/[^/~]*(~[01][^/~]*)*)*$'
+          example:
+            - op: "replace"
+              path: "/visible_entities/entity1/position"
+              value: [11.0, 21.0, 0.0]
+        context_digest:
+          type: string
+          description: Hash digest of the new view context
+          minLength: 1
+          example: "sha256:def456abc789"
+        schema_version:
+          type: string
+          description: Schema version using semantic versioning
+          pattern: '^\d+\.\d+\.\d+$'
+          example: "1.0.0"
+
+    IntentRequest:
+      type: object
+      required:
+        - kind
+        - payload
+        - context_seq
+        - req_id
+        - priority
+        - schema_version
+      properties:
+        kind:
+          type: string
+          enum: [Speak, Move, Interact, Custom]
+          description: Type of intent
+          example: "Speak"
+        payload:
+          type: object
+          description: Intent-specific data
+          additionalProperties: true
+          example:
+            text: "Hello, world!"
+            target_agent: "agent_002"
+        context_seq:
+          type: integer
+          description: View sequence number this intent is based on
+          minimum: 0
+          example: 42
+        req_id:
+          type: string
+          description: Unique request identifier for idempotency
+          minLength: 1
+          example: "req_550e8400-e29b-41d4"
+        priority:
+          type: integer
+          description: Intent priority (higher numbers = higher priority)
+          example: 1
+        schema_version:
+          type: string
+          description: Schema version using semantic versioning
+          pattern: '^\d+\.\d+\.\d+$'
+          example: "1.0.0"
+
+    IntentResponse:
+      type: object
+      required:
+        - req_id
+        - status
+        - message
+      properties:
+        req_id:
+          type: string
+          description: Request ID from the original intent
+          example: "req_550e8400-e29b-41d4"
+        effect_id:
+          type: string
+          description: ID of the created effect (if successful)
+          example: "effect_770g0622-g4bd-63f6"
+        global_seq:
+          type: integer
+          description: Global sequence number of the effect
+          minimum: 0
+          example: 1001
+        status:
+          type: string
+          enum: [accepted, rejected, deferred]
+          description: Processing status
+          example: "accepted"
+        message:
+          type: string
+          description: Human-readable status message
+          example: "Intent processed successfully"
+
+    EffectDraft:
+      type: object
+      required:
+        - kind
+        - payload
+        - source_id
+        - schema_version
+      properties:
+        kind:
+          type: string
+          description: Type of effect
+          example: "TimeTick"
+        payload:
+          type: object
+          description: Effect-specific data
+          additionalProperties: true
+          example:
+            sim_time: 123.456
+            delta_time: 0.016
+        source_id:
+          type: string
+          description: ID of the system that generated this effect
+          minLength: 1
+          example: "unity_adapter"
+        schema_version:
+          type: string
+          description: Schema version using semantic versioning
+          pattern: '^\d+\.\d+\.\d+$'
+          example: "1.0.0"
+
+    EventResponse:
+      type: object
+      required:
+        - effect_id
+        - global_seq
+        - sim_time
+        - status
+      properties:
+        effect_id:
+          type: string
+          description: ID of the created effect
+          example: "effect_880h1733-h5ce-74g7"
+        global_seq:
+          type: integer
+          description: Global sequence number assigned to the effect
+          minimum: 0
+          example: 1002
+        sim_time:
+          type: float
+          description: Simulation time when effect was processed
+          minimum: 0.0
+          example: 123.456
+        status:
+          type: string
+          enum: [processed, rejected, deferred]
+          description: Processing status
+          example: "processed"
+        affected_agents:
+          type: array
+          description: List of agents that will receive observations for this effect
+          items:
+            type: string
+          example: ["agent_001", "agent_002"]
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - name
+            - message
+            - recovery_action
+            - timestamp
+          properties:
+            code:
+              type: integer
+              description: Numeric error code from docs/errors.md
+              example: 1001
+            name:
+              type: string
+              description: Error name constant
+              example: "STALE_CONTEXT"
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Agent's context is outdated relative to current world state"
+            details:
+              type: object
+              description: Structured error details for debugging
+              additionalProperties: true
+              example:
+                agent_id: "agent_123"
+                expected_view_seq: 42
+                actual_view_seq: 45
+                req_id: "req_456"
+            recovery_action:
+              type: string
+              enum: [RETRY, RETRY_WITH_DELAY, REGENERATE, MODIFY_INTENT, DEFER, SHED_OLDEST, ABORT]
+              description: Suggested recovery action
+              example: "REGENERATE"
+            timestamp:
+              type: string
+              format: date-time
+              description: When the error occurred
+              example: "2024-01-15T10:30:00Z"
+            trace_id:
+              type: string
+              description: Distributed tracing ID
+              example: "trace_789"
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters or request format
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: 1002
+              name: "INVALID_VIEW_SEQ"
+              message: "Provided view_seq is invalid or out of range"
+              details:
+                provided_view_seq: -1
+                valid_range: "0 to 1000"
+              recovery_action: "RETRY"
+              timestamp: "2024-01-15T10:30:00Z"
+              trace_id: "trace_123"
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: 5001
+              name: "UNAUTHORIZED"
+              message: "Authentication required"
+              details:
+                auth_method: "bearer_token"
+              recovery_action: "ABORT"
+              timestamp: "2024-01-15T10:30:00Z"
+              trace_id: "trace_124"
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: 5002
+              name: "FORBIDDEN"
+              message: "Insufficient permissions for operation"
+              details:
+                required_permission: "agent:observe"
+                agent_id: "agent_001"
+              recovery_action: "ABORT"
+              timestamp: "2024-01-15T10:30:00Z"
+              trace_id: "trace_125"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: 5003
+              name: "INVALID_AGENT_ID"
+              message: "Agent ID is invalid or not found"
+              details:
+                agent_id: "nonexistent_agent"
+              recovery_action: "ABORT"
+              timestamp: "2024-01-15T10:30:00Z"
+              trace_id: "trace_126"
+
+    Conflict:
+      description: Request conflicts with current state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: 1001
+              name: "STALE_CONTEXT"
+              message: "Agent's context is outdated relative to current world state"
+              details:
+                agent_id: "agent_123"
+                expected_view_seq: 42
+                actual_view_seq: 45
+                req_id: "req_456"
+              recovery_action: "REGENERATE"
+              timestamp: "2024-01-15T10:30:00Z"
+              trace_id: "trace_127"
+
+    UnprocessableEntity:
+      description: Request format is valid but content cannot be processed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: 2003
+              name: "INTENT_VALIDATION_FAILED"
+              message: "Intent failed validation rules"
+              details:
+                validation_errors: ["Target position is out of bounds"]
+                intent_kind: "Move"
+              recovery_action: "MODIFY_INTENT"
+              timestamp: "2024-01-15T10:30:00Z"
+              trace_id: "trace_128"
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: 3001
+              name: "QUOTA_EXCEEDED"
+              message: "Agent has exceeded rate or resource quota"
+              details:
+                quota_type: "intents_per_minute"
+                limit: 60
+                current_usage: 61
+                reset_time: "2024-01-15T10:31:00Z"
+              recovery_action: "DEFER"
+              timestamp: "2024-01-15T10:30:00Z"
+              trace_id: "trace_129"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: 7002
+              name: "DATABASE_ERROR"
+              message: "Database operation failed"
+              details:
+                operation: "insert_event_log_entry"
+                database: "simulation_db"
+              recovery_action: "RETRY"
+              timestamp: "2024-01-15T10:30:00Z"
+              trace_id: "trace_130"
+
+tags:
+  - name: Observation
+    description: Agent observation and view management
+  - name: Intent
+    description: Agent intent submission and management
+  - name: Events
+    description: Event emission and processing
+  - name: Streaming
+    description: Real-time WebSocket streaming
+  - name: System
+    description: System health and status endpoints
