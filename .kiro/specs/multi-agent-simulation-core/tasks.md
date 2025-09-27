@@ -15,7 +15,7 @@
   - Write unit tests for all data model validation and serialization
   - _Requirements: 0.1, 0.2, 0.3, 0.4, 0.5_
 
-- [ ] 2. Implement TimedQueue for latency simulation
+- [x] 2. Implement TimedQueue for latency simulation
   - Create TimedQueue class with heap-based priority scheduling
   - Implement put_at() method for timed delivery with proper locking
   - Implement get() method with lock-free sleep to avoid blocking
