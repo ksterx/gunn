@@ -232,5 +232,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/your-org/gunn/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/gunn/discussions)
+- **Issues**: [GitHub Issues](https://github.com/ksterx/gunn/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/ksterx/gunn/discussions)
