@@ -1,6 +1,5 @@
 """Integration tests for replay CLI functionality."""
 
-import asyncio
 import json
 import tempfile
 from pathlib import Path
@@ -9,7 +8,6 @@ import pytest
 
 from gunn.cli.replay import ReplayEngine, run_replay_command
 from gunn.core.event_log import EventLog
-from gunn.schemas.types import Effect
 
 
 class TestReplayEngine:
@@ -38,7 +36,7 @@ class TestReplayEngine:
             await event_log.append(effect, f"req_{effect['global_seq']}")
 
         # Save to temporary file
-        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         temp_path = Path(temp_file.name)
         temp_file.close()
 
@@ -50,7 +48,7 @@ class TestReplayEngine:
         """Test loading a log file."""
         engine = ReplayEngine(sample_log_file)
         await engine.load_log()
-        
+
         assert engine.event_log.entry_count == 5
         assert engine.event_log.world_seed == 12345
 
@@ -59,10 +57,10 @@ class TestReplayEngine:
         """Test replaying full range."""
         engine = ReplayEngine(sample_log_file)
         await engine.load_log()
-        
+
         entries = await engine.replay_range(0)
         assert len(entries) == 5
-        
+
         # Verify world state was updated
         assert "last_effect_seq" in engine.world_state.metadata
         assert engine.world_state.metadata["last_effect_seq"] == 4
@@ -72,7 +70,7 @@ class TestReplayEngine:
         """Test replaying partial range."""
         engine = ReplayEngine(sample_log_file)
         await engine.load_log()
-        
+
         entries = await engine.replay_range(2, 3)
         assert len(entries) == 2
         assert entries[0].global_seq == 2
@@ -83,7 +81,7 @@ class TestReplayEngine:
         """Test determinism validation."""
         engine = ReplayEngine(sample_log_file)
         await engine.load_log()
-        
+
         is_deterministic = await engine.validate_determinism(iterations=3)
         assert is_deterministic is True
 
@@ -92,7 +90,7 @@ class TestReplayEngine:
         """Test integrity validation."""
         engine = ReplayEngine(sample_log_file)
         await engine.load_log()
-        
+
         is_valid = await engine.validate_integrity()
         assert is_valid is True
 
@@ -101,7 +99,7 @@ class TestReplayEngine:
         """Test Move effect application."""
         engine = ReplayEngine(sample_log_file)
         await engine.load_log()
-        
+
         # Apply a Move effect
         move_effect = {
             "uuid": "test-uuid",
@@ -112,9 +110,9 @@ class TestReplayEngine:
             "source_id": "test_agent",
             "schema_version": "1.0.0",
         }
-        
+
         await engine._apply_effect(move_effect)
-        
+
         # Verify spatial index was updated
         assert "test_agent" in engine.world_state.spatial_index
         assert engine.world_state.spatial_index["test_agent"] == (100.0, 200.0, 50.0)
@@ -124,7 +122,7 @@ class TestReplayEngine:
         """Test Speak effect application."""
         engine = ReplayEngine(sample_log_file)
         await engine.load_log()
-        
+
         # Apply a Speak effect
         speak_effect = {
             "uuid": "test-uuid",
@@ -135,19 +133,21 @@ class TestReplayEngine:
             "source_id": "test_agent",
             "schema_version": "1.0.0",
         }
-        
+
         await engine._apply_effect(speak_effect)
-        
+
         # Verify entity was updated
         assert "test_agent" in engine.world_state.entities
-        assert engine.world_state.entities["test_agent"]["last_message"] == "Hello, world!"
+        assert (
+            engine.world_state.entities["test_agent"]["last_message"] == "Hello, world!"
+        )
 
     @pytest.mark.asyncio
     async def test_effect_application_interact(self, sample_log_file: Path):
         """Test Interact effect application."""
         engine = ReplayEngine(sample_log_file)
         await engine.load_log()
-        
+
         # Apply an Interact effect
         interact_effect = {
             "uuid": "test-uuid",
@@ -158,9 +158,9 @@ class TestReplayEngine:
             "source_id": "test_agent",
             "schema_version": "1.0.0",
         }
-        
+
         await engine._apply_effect(interact_effect)
-        
+
         # Verify relationship was created
         assert "test_agent" in engine.world_state.relationships
         assert "target_agent" in engine.world_state.relationships["test_agent"]
@@ -192,7 +192,7 @@ class TestReplayCommand:
             await event_log.append(effect, f"req_{effect['global_seq']}")
 
         # Save to temporary file
-        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         temp_path = Path(temp_file.name)
         temp_file.close()
 
@@ -223,26 +223,31 @@ class TestReplayCommand:
     @pytest.mark.asyncio
     async def test_replay_command_validate_determinism(self, sample_log_file: Path):
         """Test replay command with determinism validation."""
-        args = [str(sample_log_file), "--validate-determinism", "--determinism-iterations", "2"]
+        args = [
+            str(sample_log_file),
+            "--validate-determinism",
+            "--determinism-iterations",
+            "2",
+        ]
         result = await run_replay_command(args)
         assert result == 0
 
     @pytest.mark.asyncio
     async def test_replay_command_with_output(self, sample_log_file: Path):
         """Test replay command with output file."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             output_path = Path(f.name)
 
         try:
             args = [str(sample_log_file), "--output", str(output_path)]
             result = await run_replay_command(args)
             assert result == 0
-            
+
             # Verify output file was created and contains expected data
             assert output_path.exists()
-            with open(output_path, 'r') as f:
+            with open(output_path) as f:
                 output_data = json.load(f)
-            
+
             assert "metadata" in output_data
             assert "final_world_state" in output_data
             assert "replayed_entries" in output_data
@@ -289,16 +294,17 @@ class TestReplayDeterminism:
         """Test that multiple replays produce identical results."""
         # Create a log with random elements
         event_log = EventLog(world_seed=11111)
-        
+
         # Add effects that use random numbers
         import random
+
         random.seed(11111)  # Set seed for consistent test
-        
+
         for i in range(20):
             # Simulate some randomness in effect creation
             random_x = random.randint(0, 100)
             random_y = random.randint(0, 100)
-            
+
             effect = {
                 "uuid": f"uuid-{i:03d}",
                 "kind": "Move",
@@ -311,7 +317,7 @@ class TestReplayDeterminism:
             await event_log.append(effect)
 
         # Save to temporary file
-        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         temp_path = Path(temp_file.name)
         temp_file.close()
 
@@ -323,17 +329,19 @@ class TestReplayDeterminism:
             for iteration in range(3):
                 engine = ReplayEngine(temp_path)
                 await engine.load_log()
-                
+
                 # Replay all events
                 await engine.replay_range(0)
-                
+
                 # Capture final state
                 final_state = engine.world_state.model_dump()
                 results.append(final_state)
 
             # All results should be identical
             for i in range(1, len(results)):
-                assert results[i] == results[0], f"Iteration {i} produced different results"
+                assert (
+                    results[i] == results[0]
+                ), f"Iteration {i} produced different results"
 
         finally:
             temp_path.unlink()
@@ -343,7 +351,7 @@ class TestReplayDeterminism:
         """Test that seed override produces consistent results."""
         # Create a log
         event_log = EventLog(world_seed=22222)
-        
+
         for i in range(5):
             effect = {
                 "uuid": f"uuid-{i}",
@@ -357,7 +365,7 @@ class TestReplayDeterminism:
             await event_log.append(effect)
 
         # Save to temporary file
-        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
         temp_path = Path(temp_file.name)
         temp_file.close()
 
@@ -366,15 +374,15 @@ class TestReplayDeterminism:
 
             # Test with different seed overrides
             override_seed = 99999
-            
+
             results = []
             for iteration in range(2):
                 engine = ReplayEngine(temp_path, world_seed=override_seed)
                 await engine.load_log()
-                
+
                 # Verify seed was overridden
                 assert engine.event_log.world_seed == override_seed
-                
+
                 await engine.replay_range(0)
                 final_state = engine.world_state.model_dump()
                 results.append(final_state)

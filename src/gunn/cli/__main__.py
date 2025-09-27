@@ -59,6 +59,7 @@ def print_version() -> None:
 def run_replay(args: list[str]) -> int:
     """Run the replay command."""
     from gunn.cli.replay import main as replay_main
+
     return replay_main(args)
 
 

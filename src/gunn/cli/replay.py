@@ -4,10 +4,9 @@ import argparse
 import asyncio
 import json
 import random
-import sys
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from gunn.core.event_log import EventLog
 from gunn.schemas.messages import EventLogEntry, WorldState
@@ -22,7 +21,7 @@ class ReplayEngine:
 
     def __init__(self, log_file: Path, world_seed: Optional[int] = None):
         """Initialize the replay engine.
-        
+
         Args:
             log_file: Path to the event log file
             world_seed: Optional seed override for determinism testing
@@ -37,7 +36,7 @@ class ReplayEngine:
         """Load the event log from file."""
         await self.event_log.load_from_file(self.log_file)
         self._original_seed = self.event_log.world_seed
-        
+
         # If we had a seed override, apply it after loading
         if self._seed_override is not None:
             self.event_log._world_seed = self._seed_override
@@ -47,7 +46,7 @@ class ReplayEngine:
                 original_seed=self._original_seed,
                 override_seed=self._seed_override,
             )
-        
+
         logger.info(
             "Loaded event log for replay",
             file_path=str(self.log_file),
@@ -55,18 +54,20 @@ class ReplayEngine:
             world_seed=self.event_log.world_seed,
         )
 
-    async def replay_range(self, from_seq: int = 0, to_seq: Optional[int] = None) -> List[EventLogEntry]:
+    async def replay_range(
+        self, from_seq: int = 0, to_seq: Optional[int] = None
+    ) -> list[EventLogEntry]:
         """Replay events in a specific range.
-        
+
         Args:
             from_seq: Starting sequence number (inclusive)
             to_seq: Ending sequence number (inclusive), or None for latest
-            
+
         Returns:
             List of replayed entries
         """
         entries = await self.event_log.get_entries_range(from_seq, to_seq)
-        
+
         logger.info(
             "Starting replay",
             from_seq=from_seq,
@@ -76,7 +77,7 @@ class ReplayEngine:
 
         # Reset world state for clean replay
         self.world_state = WorldState()
-        
+
         # Set deterministic seed
         if self._original_seed is not None:
             random.seed(self._original_seed)
@@ -85,7 +86,7 @@ class ReplayEngine:
         for entry in entries:
             await self._apply_effect(entry.effect)
             replayed_entries.append(entry)
-            
+
             logger.debug(
                 "Replayed effect",
                 global_seq=entry.global_seq,
@@ -102,10 +103,10 @@ class ReplayEngine:
 
     async def validate_determinism(self, iterations: int = 2) -> bool:
         """Validate that replay produces deterministic results.
-        
+
         Args:
             iterations: Number of replay iterations to compare
-            
+
         Returns:
             True if all iterations produce identical results
         """
@@ -125,7 +126,7 @@ class ReplayEngine:
 
         for i in range(iterations):
             logger.debug(f"Running determinism iteration {i + 1}/{iterations}")
-            
+
             # Reset state and seed
             self.world_state = WorldState()
             if self._original_seed is not None:
@@ -136,11 +137,13 @@ class ReplayEngine:
             for entry in all_entries:
                 await self._apply_effect(entry.effect)
                 # Capture state snapshot after each effect
-                snapshots.append({
-                    "global_seq": entry.global_seq,
-                    "world_state_hash": hash(str(self.world_state.model_dump())),
-                    "random_state": random.getstate(),
-                })
+                snapshots.append(
+                    {
+                        "global_seq": entry.global_seq,
+                        "world_state_hash": hash(str(self.world_state.model_dump())),
+                        "random_state": random.getstate(),
+                    }
+                )
 
             iteration_results.append(snapshots)
 
@@ -157,7 +160,9 @@ class ReplayEngine:
                 is_deterministic = False
                 continue
 
-            for j, (snap_0, snap_i) in enumerate(zip(iteration_results[0], iteration_results[i])):
+            for j, (snap_0, snap_i) in enumerate(
+                zip(iteration_results[0], iteration_results[i])
+            ):
                 if snap_0["world_state_hash"] != snap_i["world_state_hash"]:
                     logger.error(
                         "Determinism violation: world state mismatch",
@@ -187,26 +192,26 @@ class ReplayEngine:
 
     async def validate_integrity(self) -> bool:
         """Validate log integrity using hash chains.
-        
+
         Returns:
             True if integrity is valid
         """
         logger.info("Validating log integrity")
         is_valid = await self.event_log.validate_integrity()
-        
+
         if is_valid:
             logger.info("Log integrity validation passed")
         else:
             logger.error("Log integrity validation failed")
-            
+
         return is_valid
 
     async def _apply_effect(self, effect: Effect) -> None:
         """Apply an effect to the world state.
-        
+
         This is a simplified implementation for demonstration.
         In a real system, this would delegate to the appropriate handlers.
-        
+
         Args:
             effect: The effect to apply
         """
@@ -214,7 +219,7 @@ class ReplayEngine:
         if effect["kind"] == "Move":
             payload = effect["payload"]
             entity_id = effect["source_id"]
-            
+
             if "x" in payload and "y" in payload:
                 # Update spatial index
                 self.world_state.spatial_index[entity_id] = (
@@ -222,27 +227,29 @@ class ReplayEngine:
                     float(payload["y"]),
                     payload.get("z", 0.0),
                 )
-                
+
         elif effect["kind"] == "Speak":
             payload = effect["payload"]
             entity_id = effect["source_id"]
-            
+
             # Update entity with last message
             if entity_id not in self.world_state.entities:
                 self.world_state.entities[entity_id] = {}
-            
-            self.world_state.entities[entity_id]["last_message"] = payload.get("text", "")
-            
+
+            self.world_state.entities[entity_id]["last_message"] = payload.get(
+                "text", ""
+            )
+
         elif effect["kind"] == "Interact":
             payload = effect["payload"]
             entity_id = effect["source_id"]
             target_id = payload.get("target_id")
-            
+
             if target_id:
                 # Update relationships
                 if entity_id not in self.world_state.relationships:
                     self.world_state.relationships[entity_id] = []
-                
+
                 if target_id not in self.world_state.relationships[entity_id]:
                     self.world_state.relationships[entity_id].append(target_id)
 
@@ -251,12 +258,12 @@ class ReplayEngine:
         self.world_state.metadata["last_effect_time"] = effect["sim_time"]
 
 
-async def run_replay_command(args: List[str]) -> int:
+async def run_replay_command(args: list[str]) -> int:
     """Run the replay command with parsed arguments.
-    
+
     Args:
         args: Command line arguments
-        
+
     Returns:
         Exit code (0 for success, non-zero for error)
     """
@@ -264,13 +271,13 @@ async def run_replay_command(args: List[str]) -> int:
         prog="gunn replay",
         description="Replay event logs for debugging and validation",
     )
-    
+
     parser.add_argument(
         "log_file",
         type=Path,
         help="Path to the event log file",
     )
-    
+
     parser.add_argument(
         "--from",
         dest="from_seq",
@@ -278,46 +285,46 @@ async def run_replay_command(args: List[str]) -> int:
         default=0,
         help="Starting sequence number (default: 0)",
     )
-    
+
     parser.add_argument(
         "--to",
         dest="to_seq",
         type=int,
         help="Ending sequence number (default: latest)",
     )
-    
+
     parser.add_argument(
         "--validate-integrity",
         action="store_true",
         help="Validate log integrity using hash chains",
     )
-    
+
     parser.add_argument(
         "--validate-determinism",
         action="store_true",
         help="Validate deterministic replay behavior",
     )
-    
+
     parser.add_argument(
         "--determinism-iterations",
         type=int,
         default=3,
         help="Number of iterations for determinism validation (default: 3)",
     )
-    
+
     parser.add_argument(
         "--seed",
         type=int,
         help="Override world seed for testing",
     )
-    
+
     parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
         help="Enable verbose logging",
     )
-    
+
     parser.add_argument(
         "--output",
         "-o",
@@ -352,7 +359,9 @@ async def run_replay_command(args: List[str]) -> int:
 
         # Validate determinism if requested
         if parsed_args.validate_determinism:
-            if not await engine.validate_determinism(parsed_args.determinism_iterations):
+            if not await engine.validate_determinism(
+                parsed_args.determinism_iterations
+            ):
                 logger.error("Determinism validation failed")
                 return 1
 
@@ -384,10 +393,10 @@ async def run_replay_command(args: List[str]) -> int:
                 "final_world_state": engine.world_state.model_dump(),
                 "replayed_entries": [entry.model_dump() for entry in replayed_entries],
             }
-            
-            with open(parsed_args.output, 'w') as f:
+
+            with open(parsed_args.output, "w") as f:
                 json.dump(results, f, indent=2)
-            
+
             logger.info(f"Results saved to {parsed_args.output}")
 
         return 0
@@ -397,12 +406,12 @@ async def run_replay_command(args: List[str]) -> int:
         return 1
 
 
-def main(args: List[str]) -> int:
+def main(args: list[str]) -> int:
     """Main entry point for replay command.
-    
+
     Args:
         args: Command line arguments
-        
+
     Returns:
         Exit code
     """

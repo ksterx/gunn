@@ -1,7 +1,6 @@
 """Unit tests for EventLog implementation."""
 
 import asyncio
-import json
 import tempfile
 from pathlib import Path
 
@@ -36,7 +35,7 @@ class TestEventLog:
     async def test_append_effect(self, event_log: EventLog, sample_effect: Effect):
         """Test appending an effect to the log."""
         global_seq = await event_log.append(sample_effect, "req_123")
-        
+
         assert global_seq == sample_effect["global_seq"]
         assert event_log.entry_count == 1
         assert event_log.get_latest_seq() == sample_effect["global_seq"]
@@ -49,7 +48,7 @@ class TestEventLog:
             "kind": "Move",
             # Missing required fields
         }
-        
+
         with pytest.raises(ValueError, match="Effect must contain"):
             await event_log.append(invalid_effect)
 
@@ -150,6 +149,7 @@ class TestEventLog:
     @pytest.mark.asyncio
     async def test_concurrent_appends(self, event_log: EventLog):
         """Test concurrent append operations."""
+
         async def append_effect(i: int):
             effect = {
                 "uuid": f"uuid-{i}",
@@ -191,7 +191,7 @@ class TestEventLog:
             await event_log.append(effect)
 
         # Save to temporary file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             temp_path = Path(f.name)
 
         try:
@@ -218,7 +218,7 @@ class TestEventLog:
         """Test loading from nonexistent file raises FileNotFoundError."""
         event_log = EventLog()
         nonexistent_path = Path("/nonexistent/file.json")
-        
+
         with pytest.raises(FileNotFoundError):
             await event_log.load_from_file(nonexistent_path)
 
@@ -226,7 +226,7 @@ class TestEventLog:
     async def test_load_invalid_file(self):
         """Test loading from invalid file raises ValueError."""
         # Create invalid JSON file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("invalid json content")
             temp_path = Path(f.name)
 
@@ -267,9 +267,9 @@ class TestEventLogPerformance:
     async def test_large_log_performance(self):
         """Test performance with large number of entries."""
         import time
-        
+
         event_log = EventLog()
-        
+
         # Add many effects
         start_time = time.perf_counter()
         for i in range(1000):
@@ -283,24 +283,26 @@ class TestEventLogPerformance:
                 "schema_version": "1.0.0",
             }
             await event_log.append(effect)
-        
+
         append_time = time.perf_counter() - start_time
-        
+
         # Test retrieval performance
         start_time = time.perf_counter()
         entries = await event_log.get_entries_range(0, 999)
         retrieval_time = time.perf_counter() - start_time
-        
+
         # Test integrity validation performance
         start_time = time.perf_counter()
         is_valid = await event_log.validate_integrity()
         validation_time = time.perf_counter() - start_time
-        
+
         # Verify results
         assert len(entries) == 1000
         assert is_valid is True
-        
+
         # Performance assertions (generous limits for CI)
         assert append_time < 5.0, f"Append took too long: {append_time:.3f}s"
         assert retrieval_time < 1.0, f"Retrieval took too long: {retrieval_time:.3f}s"
-        assert validation_time < 2.0, f"Validation took too long: {validation_time:.3f}s"
+        assert (
+            validation_time < 2.0
+        ), f"Validation took too long: {validation_time:.3f}s"

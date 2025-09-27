@@ -154,44 +154,39 @@ class TestOperationTimer:
     @pytest.mark.asyncio
     async def test_operation_timer_success(self):
         """Test successful operation timing."""
-        with patch("gunn.utils.telemetry.OPERATION_COUNTER") as mock_counter, \
-             patch("gunn.utils.telemetry.OPERATION_DURATION") as mock_duration:
-            
+        with patch("gunn.utils.telemetry.OPERATION_COUNTER") as mock_counter, patch(
+            "gunn.utils.telemetry.OPERATION_DURATION"
+        ) as mock_duration:
             mock_counter.labels.return_value.inc = lambda: None
             mock_duration.labels.return_value.observe = lambda x: None
-            
+
             with OperationTimer("test_op", "agent_1"):
                 await asyncio.sleep(0.01)  # Small delay
-            
+
             # Verify metrics were recorded
             mock_counter.labels.assert_called_with(
-                operation="test_op",
-                status="success",
-                agent_id="agent_1"
+                operation="test_op", status="success", agent_id="agent_1"
             )
             mock_duration.labels.assert_called_with(
-                operation="test_op",
-                agent_id="agent_1"
+                operation="test_op", agent_id="agent_1"
             )
 
     @pytest.mark.asyncio
     async def test_operation_timer_error(self):
         """Test operation timing with error."""
-        with patch("gunn.utils.telemetry.OPERATION_COUNTER") as mock_counter, \
-             patch("gunn.utils.telemetry.OPERATION_DURATION") as mock_duration:
-            
+        with patch("gunn.utils.telemetry.OPERATION_COUNTER") as mock_counter, patch(
+            "gunn.utils.telemetry.OPERATION_DURATION"
+        ) as mock_duration:
             mock_counter.labels.return_value.inc = lambda: None
             mock_duration.labels.return_value.observe = lambda x: None
-            
+
             with pytest.raises(ValueError):
                 with OperationTimer("test_op", "agent_1"):
                     raise ValueError("Test error")
-            
+
             # Verify error status was recorded
             mock_counter.labels.assert_called_with(
-                operation="test_op",
-                status="error",
-                agent_id="agent_1"
+                operation="test_op", status="error", agent_id="agent_1"
             )
 
 
@@ -244,13 +239,13 @@ class TestPerformanceImpact:
     def test_redaction_performance(self):
         """Test that PII redaction doesn't significantly impact performance."""
         text = "This is a test message with user@example.com and 555-1234"
-        
+
         # Time the redaction operation
         start_time = time.perf_counter()
         for _ in range(1000):
             redact_pii(text)
         end_time = time.perf_counter()
-        
+
         # Should complete 1000 redactions in reasonable time (< 1 second)
         duration = end_time - start_time
         assert duration < 1.0, f"PII redaction took too long: {duration:.3f}s"
@@ -267,13 +262,13 @@ class TestPerformanceImpact:
                 },
             }
         }
-        
+
         # Time the redaction operation
         start_time = time.perf_counter()
         for _ in range(100):
             redact_dict(data)
         end_time = time.perf_counter()
-        
+
         # Should complete 100 redactions in reasonable time (< 1 second)
         duration = end_time - start_time
         assert duration < 1.0, f"Dict redaction took too long: {duration:.3f}s"

@@ -10,7 +10,7 @@ This module provides centralized observability infrastructure including:
 import asyncio
 import re
 import time
-from typing import Any, Dict
+from typing import Any
 
 import structlog
 from opentelemetry import metrics, trace
@@ -75,7 +75,7 @@ def redact_pii(text: Any) -> Any:
     return result
 
 
-def redact_dict(data: dict[str, Any]) -> dict[str, Any]:
+def redact_dict(data: Any) -> Any:
     """Recursively redact PII from dictionary values.
 
     Args:
@@ -160,7 +160,7 @@ def setup_logging(service_name: str = "gunn", log_level: str = "INFO") -> None:
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso"),
-            PIIRedactionProcessor(),
+            PIIRedactionProcessor(),  # type: ignore[list-item]
             structlog.dev.ConsoleRenderer()
             if log_level == "DEBUG"
             else structlog.processors.JSONRenderer(),
@@ -185,15 +185,17 @@ def setup_tracing(
         service_name: Name of the service for tracing
         otlp_endpoint: OTLP endpoint URL (optional)
     """
+    from opentelemetry.sdk.trace.export import SpanExporter
+    
+    span_exporter: SpanExporter
     if otlp_endpoint:
         span_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
-        span_processor = BatchSpanProcessor(span_exporter)
     else:
         # Use console exporter for development
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
-
         span_exporter = ConsoleSpanExporter()
-        span_processor = BatchSpanProcessor(span_exporter)
+    
+    span_processor = BatchSpanProcessor(span_exporter)
 
     provider = TracerProvider()
     provider.add_span_processor(span_processor)
@@ -209,12 +211,14 @@ def setup_metrics(
         service_name: Name of the service for metrics
         otlp_endpoint: OTLP endpoint URL (optional)
     """
+    from opentelemetry.sdk.metrics.export import MetricExporter
+    
+    metric_exporter: MetricExporter
     if otlp_endpoint:
         metric_exporter = OTLPMetricExporter(endpoint=otlp_endpoint)
     else:
         # Use console exporter for development
         from opentelemetry.sdk.metrics.export import ConsoleMetricExporter
-
         metric_exporter = ConsoleMetricExporter()
 
     metric_reader = PeriodicExportingMetricReader(
