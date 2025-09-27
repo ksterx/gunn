@@ -18,19 +18,19 @@ graph TB
         WebAPI[Web APIs]
         LLM[LLM Services]
     end
-    
+
     subgraph "Adapters Layer"
         UA[Unity Adapter]
         UEA[Unreal Adapter]
         WA[Web Adapter]
         LA[LLM Adapter]
     end
-    
+
     subgraph "Facade Layer"
         RLF[RL Facade]
         MF[Message Facade]
     end
-    
+
     subgraph "Core System"
         O[Orchestrator]
         EL[Event Log]
@@ -38,31 +38,31 @@ graph TB
         OP[Observation Policies]
         EV[Effect Validator]
     end
-    
+
     subgraph "Agent Handles"
         AH1[Agent Handle 1]
         AH2[Agent Handle 2]
         AHN[Agent Handle N]
     end
-    
+
     Unity --> UA
     Unreal --> UEA
     WebAPI --> WA
     LLM --> LA
-    
+
     UA --> RLF
     UEA --> MF
     WA --> MF
     LA --> RLF
-    
+
     RLF --> O
     MF --> O
-    
+
     O --> EL
     O --> WS
     O --> OP
     O --> EV
-    
+
     O --> AH1
     O --> AH2
     O --> AHN
@@ -165,15 +165,15 @@ class CancelToken:
         self.agent_id = agent_id
         self._cancelled = asyncio.Event()
         self.reason: str | None = None
-    
+
     @property
     def cancelled(self) -> bool:
         return self._cancelled.is_set()
-    
+
     def cancel(self, reason: str):
         self.reason = reason
         self._cancelled.set()
-    
+
     async def wait_cancelled(self):
         """Wait until token is cancelled"""
         await self._cancelled.wait()
@@ -183,7 +183,7 @@ class CancelToken:
 
 ```python
 class Orchestrator:
-    def __init__(self, config: OrchestratorConfig, world_id: str = "default", 
+    def __init__(self, config: OrchestratorConfig, world_id: str = "default",
                  effect_validator: EffectValidator | None = None):
         self.world_id = world_id
         self.config = config
@@ -197,16 +197,16 @@ class Orchestrator:
         self._req_id_dedup: Dict[tuple, int] = {}  # (world_id, agent_id, req_id) -> global_seq
         self._per_agent_queues: Dict[str, TimedQueue] = {}  # Timed delivery queues
         self._sim_time_authority: str = "unity"  # Which adapter controls sim_time
-        
+
         # Processing order: quota → backpressure → priority → fairness
-    
+
     def set_sim_time_authority(self, authority: Literal["unity", "unreal", "none"]):
         """Set which adapter controls sim_time"""
         self._sim_time_authority = authority
-    
+
     async def register_agent(self, agent_id: str, policy: ObservationPolicy) -> AgentHandle:
         """Register a new agent with observation policy"""
-        
+
     async def broadcast_event(self, draft: EffectDraft) -> None:
         """Create complete effect from draft and distribute observations"""
         effect: Effect = {
@@ -220,13 +220,13 @@ class Orchestrator:
         }
         await self.event_log.append(effect)
         # distribute observations...
-        
+
     async def submit_intent(self, intent: Intent) -> str:
         """Two-phase commit: idempotency check → validate intent → create effect"""
-        
+
     def issue_cancel_token(self, agent_id: str, req_id: str) -> CancelToken:
         """Issue cancellation token for generation tracking"""
-        
+
     async def cancel_if_stale(self, agent_id: str, req_id: str, new_view_seq: int) -> bool:
         """Check staleness and cancel if needed"""
 ```
@@ -239,24 +239,24 @@ class AgentHandle:
         self.agent_id = agent_id
         self.orchestrator = orchestrator
         self.view_seq: int = 0  # Renamed to avoid shadowing
-    
+
     async def next_observation(self) -> ObservationDelta:
         """Get next observation delta from orchestrator's timed queue"""
         timed_queue = self.orchestrator._per_agent_queues[self.agent_id]
         delta = await timed_queue.get()
         self.view_seq = delta["view_seq"]
         return delta
-        
+
     async def submit_intent(self, intent: Intent) -> str:
         """Submit intent for validation and processing"""
         return await self.orchestrator.submit_intent(intent)
-        
+
     async def cancel(self, req_id: str) -> None:
         """Cancel pending intent by req_id"""
         key = (self.orchestrator.world_id, self.agent_id, req_id)
         if key in self.orchestrator._cancel_tokens:
             self.orchestrator._cancel_tokens[key].cancel("user_requested")
-        
+
     def get_view_seq(self) -> int:
         """Get current view sequence number"""
         return self.view_seq
@@ -271,13 +271,13 @@ class ObservationPolicy:
         self.relationship_filter: List[str] = config.relationship_filter
         self.field_visibility: Dict[str, bool] = config.field_visibility
         self.latency_model: LatencyModel = config.latency_model
-    
+
     def filter_world_state(self, world_state: WorldState, agent_id: str) -> View:
         """Generate agent's view from world state"""
-        
+
     def should_observe_event(self, effect: Effect, agent_id: str, world_state: WorldState) -> bool:
         """Determine if agent should see this effect"""
-        
+
     def calculate_observation_delta(self, old_view: View, new_view: View) -> ObservationDelta:
         """Generate RFC6902 JSON Patch between views"""
 ```
@@ -301,13 +301,13 @@ class EventLog:
         self._entries: List[EventLogEntry] = []
         self._seq_counter: int = 0
         self._lock = asyncio.Lock()
-    
+
     async def append(self, effect: Effect) -> int:
         """Append effect with hash chain checksum and return global_seq"""
         async with self._lock:
             prev_checksum = self._entries[-1].checksum if self._entries else None
             checksum = chain_checksum(effect, prev_checksum)
-            
+
             entry = EventLogEntry(
                 global_seq=effect["global_seq"],
                 sim_time=effect["sim_time"],
@@ -317,13 +317,13 @@ class EventLog:
                 checksum=checksum,
                 req_id=effect.get("req_id", "")
             )
-            
+
             self._entries.append(entry)
             return effect["global_seq"]
-        
+
     def get_entries_since(self, since_seq: int) -> List[EventLogEntry]:
         """Get entries for replay/catch-up"""
-        
+
     def validate_integrity(self) -> bool:
         """Validate log integrity using checksums"""
 ```
@@ -350,7 +350,7 @@ class SpatialIndex:
     """R-tree or similar for efficient spatial queries"""
     def entities_within_range(self, center: tuple, radius: float) -> List[str]:
         pass
-    
+
     def entities_in_view_cone(self, observer: tuple, direction: tuple, angle: float, range: float) -> List[str]:
         pass
 ```
@@ -401,14 +401,14 @@ class TimedQueue:
         self._heap: List[tuple] = []
         self._cv = asyncio.Condition()
         self._seq = 0
-    
+
     async def put_at(self, deliver_at: float, item: Any):
         """Schedule item for delivery at specific time"""
         async with self._cv:
             self._seq += 1
             heapq.heappush(self._heap, (deliver_at, self._seq, item))
             self._cv.notify()
-    
+
     async def get(self) -> Any:
         """Get next item when its delivery time arrives"""
         while True:
@@ -416,15 +416,15 @@ class TimedQueue:
                 if not self._heap:
                     await self._cv.wait()
                     continue
-                
+
                 deliver_at, _, item = self._heap[0]
                 now = asyncio.get_running_loop().time()
                 delay = deliver_at - now
-                
+
                 if delay <= 0:
                     heapq.heappop(self._heap)
                     return item
-            
+
             # Sleep outside the lock to avoid blocking other operations
             if delay > 0:
                 await asyncio.sleep(delay)
@@ -446,10 +446,10 @@ def chain_checksum(effect: dict, prev_checksum: str | None) -> str:
 class ErrorRecoveryPolicy:
     def handle_stale_context(self, error: StaleContextError) -> RecoveryAction:
         """Return RETRY, ABORT, or REGENERATE"""
-        
+
     def handle_intent_conflict(self, error: IntentConflictError) -> RecoveryAction:
         """Return RETRY_WITH_DELAY, ABORT, or MODIFY_INTENT"""
-        
+
     def handle_quota_exceeded(self, error: QuotaExceededError) -> RecoveryAction:
         """Return DEFER, ABORT, or SHED_OLDEST"""
 ```
@@ -464,7 +464,7 @@ class CircuitBreaker:
         self.failure_count = 0
         self.last_failure_time = 0
         self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
-    
+
     async def call(self, func, *args, **kwargs):
         """Execute function with circuit breaker protection"""
         if self.state == "OPEN":
@@ -472,7 +472,7 @@ class CircuitBreaker:
                 self.state = "HALF_OPEN"
             else:
                 raise CircuitBreakerOpenError()
-        
+
         try:
             result = await func(*args, **kwargs)
             if self.state == "HALF_OPEN":
@@ -535,15 +535,15 @@ class CircuitBreaker:
 async def test_conversation_with_interruption():
     """Test A/B/C conversation with B interrupting A's generation"""
     orchestrator = Orchestrator(config)
-    
+
     # Register agents
     agent_a = await orchestrator.register_agent("A", conversation_policy)
     agent_b = await orchestrator.register_agent("B", conversation_policy)
     agent_c = await orchestrator.register_agent("C", conversation_policy)
-    
+
     # A starts generating response
     cancel_token = orchestrator.issue_cancel_token("A", "req_1")
-    
+
     # B emits message while A is generating
     await orchestrator.broadcast_event(EffectDraft(
         kind="MessageEmitted",
@@ -551,15 +551,15 @@ async def test_conversation_with_interruption():
         source_id="B",
         schema_version="1.0.0"
     ))
-    
+
     # Verify A's generation is cancelled
     assert cancel_token.cancelled
     assert cancel_token.reason.startswith("stale_due_to")
-    
+
     # Verify C receives both messages in correct order
     delta_1 = await agent_c.next_observation()
     delta_2 = await agent_c.next_observation()
-    
+
     assert delta_1.view_seq < delta_2.view_seq
 ```
 
@@ -664,13 +664,13 @@ class MemoryManager:
         self.max_log_entries = config.max_log_entries
         self.view_cache_size = config.view_cache_size
         self.compaction_threshold = config.compaction_threshold
-    
+
     async def compact_log(self, event_log: EventLog) -> None:
         """Compact old log entries while preserving replay capability"""
-        
+
     def evict_old_views(self, agent_handles: Dict[str, AgentHandle]) -> None:
         """Remove old cached views to free memory"""
-        
+
     def estimate_memory_usage(self) -> MemoryStats:
         """Return current memory usage statistics"""
 ```

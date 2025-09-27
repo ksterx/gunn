@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 0. Set up project foundation and tooling
+- [x] 0. Set up project foundation and tooling
   - Configure pyproject.toml with Python 3.13, pydantic v2, orjson, jsonpatch, structlog, prometheus-client, opentelemetry, fastapi, websockets, sqlite
   - Set up ruff/mypy/pytest-asyncio/pre-commit configuration for code quality
   - Create CI pipeline with linting, type checking, and testing
