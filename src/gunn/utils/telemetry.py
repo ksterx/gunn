@@ -10,6 +10,7 @@ This module provides centralized observability infrastructure including:
 import asyncio
 import re
 import time
+from collections.abc import MutableMapping
 from typing import Any
 
 import structlog
@@ -112,8 +113,11 @@ class PIIRedactionProcessor:
     """Structlog processor for PII redaction."""
 
     def __call__(
-        self, logger: Any, method_name: str, event_dict: dict[str, Any]
-    ) -> dict[str, Any]:
+        self,
+        logger: Any,
+        method_name: str,
+        event_dict: MutableMapping[str, Any],
+    ) -> Any:
         """Process log event to redact PII.
 
         Args:
@@ -155,16 +159,19 @@ def setup_logging(service_name: str = "gunn", log_level: str = "INFO") -> None:
         "ERROR": logging.ERROR,
     }
 
+    processors: list[Any] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        PIIRedactionProcessor(),
+    ]
+    if log_level == "DEBUG":
+        processors.append(structlog.dev.ConsoleRenderer())
+    else:
+        processors.append(structlog.processors.JSONRenderer())
+
     structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.processors.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            PIIRedactionProcessor(),  # type: ignore[list-item]
-            structlog.dev.ConsoleRenderer()
-            if log_level == "DEBUG"
-            else structlog.processors.JSONRenderer(),
-        ],
+        processors=processors,
         wrapper_class=structlog.make_filtering_bound_logger(
             level_map.get(log_level.upper(), logging.INFO)
         ),
@@ -176,9 +183,7 @@ def setup_logging(service_name: str = "gunn", log_level: str = "INFO") -> None:
     structlog.contextvars.bind_contextvars(service=service_name)
 
 
-def setup_tracing(
-    service_name: str = "gunn", otlp_endpoint: str | None = None
-) -> None:
+def setup_tracing(service_name: str = "gunn", otlp_endpoint: str | None = None) -> None:
     """Initialize OpenTelemetry tracing.
 
     Args:
@@ -186,15 +191,16 @@ def setup_tracing(
         otlp_endpoint: OTLP endpoint URL (optional)
     """
     from opentelemetry.sdk.trace.export import SpanExporter
-    
+
     span_exporter: SpanExporter
     if otlp_endpoint:
         span_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
     else:
         # Use console exporter for development
         from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
         span_exporter = ConsoleSpanExporter()
-    
+
     span_processor = BatchSpanProcessor(span_exporter)
 
     provider = TracerProvider()
@@ -202,9 +208,7 @@ def setup_tracing(
     trace.set_tracer_provider(provider)
 
 
-def setup_metrics(
-    service_name: str = "gunn", otlp_endpoint: str | None = None
-) -> None:
+def setup_metrics(service_name: str = "gunn", otlp_endpoint: str | None = None) -> None:
     """Initialize OpenTelemetry metrics.
 
     Args:
@@ -212,13 +216,14 @@ def setup_metrics(
         otlp_endpoint: OTLP endpoint URL (optional)
     """
     from opentelemetry.sdk.metrics.export import MetricExporter
-    
+
     metric_exporter: MetricExporter
     if otlp_endpoint:
         metric_exporter = OTLPMetricExporter(endpoint=otlp_endpoint)
     else:
         # Use console exporter for development
         from opentelemetry.sdk.metrics.export import ConsoleMetricExporter
+
         metric_exporter = ConsoleMetricExporter()
 
     metric_reader = PeriodicExportingMetricReader(
