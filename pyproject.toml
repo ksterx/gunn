@@ -1,0 +1,12 @@
+[project]
+name = "gunn"
+version = "0.1.0"
+description = "gunn (群) provides a controlled interface for agent–environment interaction, supporting both single and multi-agent settings"
+readme = "README.md"
+authors = [{ name = "ksterx", email = "kostonerx@gmail.com" }]
+requires-python = ">=3.13"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
