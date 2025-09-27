@@ -219,6 +219,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "types-pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -247,6 +248,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "structlog", specifier = ">=23.0.0" },
     { name = "typer", specifier = ">=0.19.2" },
+    { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12.20250915" },
     { name = "websockets", specifier = ">=12.0" },
 ]
 provides-extras = ["dev"]

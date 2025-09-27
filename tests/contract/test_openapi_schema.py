@@ -22,7 +22,9 @@ class TestOpenAPISchema:
         """Load the OpenAPI schema from the golden file."""
         schema_path = Path(__file__).parent.parent.parent / "schemas" / "openapi.yaml"
         with open(schema_path) as f:
-            return yaml.safe_load(f)
+            schema = yaml.safe_load(f)
+            assert isinstance(schema, dict), "OpenAPI schema must be a dictionary"
+            return schema
 
     def test_openapi_schema_loads(self, openapi_schema: dict[str, Any]) -> None:
         """Test that the OpenAPI schema file loads without errors."""

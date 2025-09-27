@@ -30,6 +30,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pre-commit>=3.5.0",
+    "types-pyyaml>=6.0.12.20250915",
 ]
 
 [project.scripts]
@@ -106,6 +107,8 @@ module = [
     "gunn.utils.test_hashing",
     "gunn.utils.hashing_demo",
     "gunn.core.test_event_log",
+    "gunn.core.test_orchestrator",
+    "gunn.core.test_orchestrator_integration",
     "gunn.utils.test_telemetry",
     "gunn.policies.test_observation",
     "gunn.policies.test_observation_integration"
