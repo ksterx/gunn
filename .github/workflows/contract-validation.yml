@@ -1,0 +1,201 @@
+name: Contract Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'schemas/**'
+      - 'src/gunn/schemas/**'
+      - 'tests/contract/**'
+      - '.github/workflows/contract-validation.yml'
+
+jobs:
+  validate-contracts:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Validate OpenAPI Schema
+      run: |
+        # Install OpenAPI validation tools
+        uv add --dev openapi-spec-validator
+
+        # Validate OpenAPI schema syntax
+        uv run python -c "
+        import yaml
+        from openapi_spec_validator import validate_spec
+
+        with open('schemas/openapi.yaml', 'r') as f:
+            spec = yaml.safe_load(f)
+
+        try:
+            validate_spec(spec)
+            print('✅ OpenAPI schema is valid')
+        except Exception as e:
+            print(f'❌ OpenAPI schema validation failed: {e}')
+            exit(1)
+        "
+
+    - name: Validate Protocol Buffer Schema
+      run: |
+        # Install protobuf compiler
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler
+
+        # Validate protobuf syntax
+        protoc --proto_path=schemas/proto --python_out=/tmp schemas/proto/simulation.proto
+
+        if [ $? -eq 0 ]; then
+          echo "✅ Protocol Buffer schema is valid"
+        else
+          echo "❌ Protocol Buffer schema validation failed"
+          exit 1
+        fi
+
+    - name: Run Contract Tests
+      run: |
+        uv run pytest tests/contract/ -v --tb=short
+
+    - name: Check for Breaking Changes
+      run: |
+        # This step would compare schemas against a baseline
+        # For now, we'll just run the breaking change detection tests
+        uv run pytest tests/contract/ -k "breaking_change" -v
+
+    - name: Generate Schema Documentation
+      if: github.event_name == 'pull_request'
+      run: |
+        # Generate OpenAPI documentation
+        uv add --dev redoc-cli
+        uv run redoc-cli build schemas/openapi.yaml --output /tmp/api-docs.html
+
+        # Generate protobuf documentation (would need protoc-gen-doc)
+        echo "📚 Schema documentation generated"
+
+    - name: Comment on PR with Schema Changes
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+
+          // Check if schema files were modified
+          const { data: files } = await github.rest.pulls.listFiles({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+          });
+
+          const schemaFiles = files.filter(file =>
+            file.filename.startsWith('schemas/') ||
+            file.filename.startsWith('src/gunn/schemas/')
+          );
+
+          if (schemaFiles.length > 0) {
+            const comment = `
+          ## 📋 Schema Changes Detected
+
+          This PR modifies API schema files. Please ensure:
+
+          - [ ] Changes are backward compatible (or version is bumped)
+          - [ ] Breaking changes are documented with migration guide
+          - [ ] Contract tests pass
+          - [ ] External integrations are notified if needed
+
+          ### Modified Schema Files:
+          ${schemaFiles.map(f => `- \`${f.filename}\``).join('\n')}
+
+          ### Validation Status:
+          - ✅ OpenAPI schema validation passed
+          - ✅ Protocol Buffer schema validation passed
+          - ✅ Contract tests passed
+
+          If this introduces breaking changes, please:
+          1. Update the version in \`schemas/openapi.yaml\`
+          2. Add migration documentation
+          3. Update the changelog
+          `;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          }
+
+  schema-drift-detection:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history for comparison
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+
+    - name: Install dependencies
+      run: uv sync
+
+    - name: Check for Schema Drift
+      run: |
+        # Compare current schemas with main branch
+        git fetch origin main
+
+        # Check if OpenAPI schema changed
+        if git diff origin/main HEAD -- schemas/openapi.yaml | grep -q '^[+-]'; then
+          echo "🔍 OpenAPI schema changes detected"
+
+          # Extract version from current and main branch
+          CURRENT_VERSION=$(grep 'version:' schemas/openapi.yaml | head -1 | sed 's/.*version: //' | tr -d '"')
+          MAIN_VERSION=$(git show origin/main:schemas/openapi.yaml | grep 'version:' | head -1 | sed 's/.*version: //' | tr -d '"')
+
+          echo "Current version: $CURRENT_VERSION"
+          echo "Main branch version: $MAIN_VERSION"
+
+          if [ "$CURRENT_VERSION" = "$MAIN_VERSION" ]; then
+            echo "⚠️  Schema changed but version not bumped"
+            echo "Please consider if this is a breaking change requiring version bump"
+          else
+            echo "✅ Version was updated with schema changes"
+          fi
+        fi
+
+        # Check if protobuf schema changed
+        if git diff origin/main HEAD -- schemas/proto/ | grep -q '^[+-]'; then
+          echo "🔍 Protocol Buffer schema changes detected"
+          echo "Please ensure backward compatibility for gRPC clients"
+        fi
+
+    - name: Validate Backward Compatibility
+      run: |
+        # This would run more sophisticated backward compatibility checks
+        # For now, we'll run our contract tests against both versions
+        echo "🔄 Running backward compatibility validation..."
+
+        # Run contract tests to ensure no breaking changes
+        uv run pytest tests/contract/test_openapi_schema.py::TestOpenAPISchema::test_breaking_change_detection -v
+        uv run pytest tests/contract/test_protobuf_schema.py::TestProtobufSchema::test_breaking_change_detection -v

@@ -55,7 +55,7 @@
   - Write integration tests for replay consistency and determinism validation
   - _Requirements: 7.3, 7.4, 9.1, 9.4_
 
-- [ ] 5. Implement ObservationPolicy for partial observation
+- [x] 5. Implement ObservationPolicy for partial observation
   - Create ObservationPolicy interface with distance and relationship filtering
   - Implement filter_world_state() method for generating agent views
   - Add should_observe_event() method for event visibility determination
@@ -64,7 +64,7 @@
   - Write unit tests for filtering accuracy, patch generation, path stability, and large patch fallback
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [ ] 5.1. Define API contracts early
+- [x] 5.1. Define API contracts early
   - Create openapi.yaml with observe/intent/emit endpoints using Pydantic schema generation
   - Define minimal protobuf schema for Unity adapter communication
   - Add golden schema files and contract tests to prevent breaking changes in CI
