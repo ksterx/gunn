@@ -1,6 +1,5 @@
 """Unit tests for hash chain utilities."""
 
-
 from gunn.utils.hashing import (
     canonical_json,
     chain_checksum,

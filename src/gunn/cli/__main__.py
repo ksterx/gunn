@@ -58,9 +58,11 @@ def print_version() -> None:
 
 def run_replay(args: list[str]) -> int:
     """Run the replay command."""
-    from gunn.cli.replay import main as replay_main
+    import asyncio
 
-    return replay_main(args)
+    from gunn.cli.replay import run_replay_command
+
+    return asyncio.run(run_replay_command(args))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 """Unit tests for observation policies."""
 
-
 import pytest
 
 from gunn.policies.observation import (
@@ -17,7 +16,7 @@ from gunn.schemas.types import Effect
 class TestPolicyConfig:
     """Test PolicyConfig validation and defaults."""
 
-    def test_default_config(self):
+    def test_default_config(self) -> None:
         """Test default configuration values."""
         config = PolicyConfig()
 
@@ -28,7 +27,7 @@ class TestPolicyConfig:
         assert config.include_spatial_index is True
         assert config.relationship_depth == 2
 
-    def test_config_validation(self):
+    def test_config_validation(self) -> None:
         """Test configuration validation."""
         # Valid config
         config = PolicyConfig(
@@ -43,7 +42,7 @@ class TestPolicyConfig:
         assert config.max_patch_ops == 25
         assert config.relationship_depth == 3
 
-    def test_invalid_config(self):
+    def test_invalid_config(self) -> None:
         """Test invalid configuration values."""
         # Negative distance limit
         with pytest.raises(ValueError):
@@ -61,7 +60,7 @@ class TestPolicyConfig:
 class TestDistanceLatencyModel:
     """Test distance-based latency model."""
 
-    def test_default_latency(self):
+    def test_default_latency(self) -> None:
         """Test default latency calculation."""
         model = DistanceLatencyModel()
 
@@ -78,7 +77,7 @@ class TestDistanceLatencyModel:
         latency = model.calculate_delay("agent1", "agent2", effect)
         assert latency == 0.01  # base_latency
 
-    def test_custom_latency(self):
+    def test_custom_latency(self) -> None:
         """Test custom latency parameters."""
         model = DistanceLatencyModel(base_latency=0.05, distance_factor=0.002)
 
@@ -132,7 +131,7 @@ class TestDefaultObservationPolicy:
 
     def test_filter_world_state_distance(
         self, policy: DefaultObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test distance-based filtering."""
         view = policy.filter_world_state(world_state, "agent1")
 
@@ -148,7 +147,7 @@ class TestDefaultObservationPolicy:
         assert view.view_seq == 0
         assert len(view.context_digest) == 64  # SHA-256 hex digest
 
-    def test_filter_world_state_relationships(self, world_state: WorldState):
+    def test_filter_world_state_relationships(self, world_state: WorldState) -> None:
         """Test relationship-based filtering."""
         config = PolicyConfig(
             distance_limit=1000.0,  # Large distance to test relationships only
@@ -167,7 +166,7 @@ class TestDefaultObservationPolicy:
         assert "agent1" in view.visible_relationships
         assert set(view.visible_relationships["agent1"]) == {"agent2", "item1"}
 
-    def test_filter_world_state_field_visibility(self, world_state: WorldState):
+    def test_filter_world_state_field_visibility(self, world_state: WorldState) -> None:
         """Test field-level visibility filtering."""
         config = PolicyConfig(
             distance_limit=100.0,
@@ -185,7 +184,7 @@ class TestDefaultObservationPolicy:
 
     def test_should_observe_event_self(
         self, policy: DefaultObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test that agents always observe their own effects."""
         effect: Effect = {
             "uuid": "test",
@@ -201,7 +200,7 @@ class TestDefaultObservationPolicy:
 
     def test_should_observe_event_spatial(
         self, policy: DefaultObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test spatial event observation."""
         # Effect at position (5, 0, 0) - close to agent1 at (0, 0, 0)
         effect: Effect = {
@@ -222,7 +221,7 @@ class TestDefaultObservationPolicy:
 
     def test_should_observe_event_entity(
         self, policy: DefaultObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test entity-specific event observation."""
         effect: Effect = {
             "uuid": "test",
@@ -242,7 +241,7 @@ class TestDefaultObservationPolicy:
 
     def test_calculate_observation_delta_small_change(
         self, policy: DefaultObservationPolicy
-    ):
+    ) -> None:
         """Test observation delta calculation for small changes."""
         old_view = View(
             agent_id="agent1",
@@ -275,7 +274,9 @@ class TestDefaultObservationPolicy:
         assert patch["path"] == "/visible_entities/agent2/health"
         assert patch["value"] == 90
 
-    def test_calculate_observation_delta_large_change(self, world_state: WorldState):
+    def test_calculate_observation_delta_large_change(
+        self, world_state: WorldState
+    ) -> None:
         """Test observation delta fallback for large changes."""
         config = PolicyConfig(max_patch_ops=2)  # Low threshold for testing
         policy = DefaultObservationPolicy(config)
@@ -317,7 +318,7 @@ class TestDefaultObservationPolicy:
 
     def test_calculate_observation_delta_different_agents(
         self, policy: DefaultObservationPolicy
-    ):
+    ) -> None:
         """Test error when calculating delta between different agents."""
         old_view = View(
             agent_id="agent1",
@@ -342,7 +343,7 @@ class TestDefaultObservationPolicy:
 
     def test_relationship_path_detection(
         self, policy: DefaultObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test relationship path detection within depth limits."""
         # agent1 -> agent2 -> agent3 (depth 2)
         assert policy._has_relationship_path("agent1", "agent3", world_state, 2) is True
@@ -356,7 +357,7 @@ class TestDefaultObservationPolicy:
         # No path
         assert policy._has_relationship_path("agent1", "wall1", world_state, 3) is False
 
-    def test_distance_calculation(self, policy: DefaultObservationPolicy):
+    def test_distance_calculation(self, policy: DefaultObservationPolicy) -> None:
         """Test distance calculation between positions."""
         pos1 = (0.0, 0.0, 0.0)
         pos2 = (3.0, 4.0, 0.0)  # 3-4-5 triangle
@@ -364,7 +365,7 @@ class TestDefaultObservationPolicy:
         distance = policy._calculate_distance(pos1, pos2)
         assert abs(distance - 5.0) < 0.001  # Should be 5.0
 
-    def test_context_digest_stability(self, policy: DefaultObservationPolicy):
+    def test_context_digest_stability(self, policy: DefaultObservationPolicy) -> None:
         """Test that context digest is stable for same content."""
         view_data1 = {
             "agent_id": "agent1",
@@ -419,7 +420,7 @@ class TestConversationObservationPolicy:
 
     def test_filter_world_state_conversation(
         self, policy: ConversationObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test conversation-focused world state filtering."""
         view = policy.filter_world_state(world_state, "agent1")
 
@@ -438,7 +439,7 @@ class TestConversationObservationPolicy:
 
     def test_should_observe_speaking_events(
         self, policy: ConversationObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test observation of speaking events."""
         speak_effect: Effect = {
             "uuid": "test",
@@ -458,7 +459,7 @@ class TestConversationObservationPolicy:
 
     def test_should_observe_participant_events(
         self, policy: ConversationObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test observation of participant join/leave events."""
         join_effect: Effect = {
             "uuid": "test",
@@ -477,7 +478,7 @@ class TestConversationObservationPolicy:
 
     def test_should_not_observe_non_conversation_events(
         self, policy: ConversationObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test that non-conversation events are not observed."""
         move_effect: Effect = {
             "uuid": "test",
@@ -496,7 +497,7 @@ class TestConversationObservationPolicy:
 class TestObservationPolicyFactory:
     """Test observation policy factory function."""
 
-    def test_create_default_policy(self):
+    def test_create_default_policy(self) -> None:
         """Test creating default observation policy."""
         config = PolicyConfig()
         policy = create_observation_policy("default", config)
@@ -504,7 +505,7 @@ class TestObservationPolicyFactory:
         assert isinstance(policy, DefaultObservationPolicy)
         assert policy.config == config
 
-    def test_create_conversation_policy(self):
+    def test_create_conversation_policy(self) -> None:
         """Test creating conversation observation policy."""
         config = PolicyConfig()
         policy = create_observation_policy("conversation", config)
@@ -512,7 +513,7 @@ class TestObservationPolicyFactory:
         assert isinstance(policy, ConversationObservationPolicy)
         assert policy.config == config
 
-    def test_create_unknown_policy(self):
+    def test_create_unknown_policy(self) -> None:
         """Test error for unknown policy type."""
         config = PolicyConfig()
 
@@ -525,7 +526,7 @@ class TestObservationPolicyFactory:
 class TestLatencyModelIntegration:
     """Test latency model integration with observation policies."""
 
-    def test_set_latency_model(self):
+    def test_set_latency_model(self) -> None:
         """Test setting custom latency model."""
         config = PolicyConfig()
         policy = DefaultObservationPolicy(config)
@@ -535,7 +536,7 @@ class TestLatencyModelIntegration:
 
         assert policy.latency_model == latency_model
 
-    def test_latency_calculation(self):
+    def test_latency_calculation(self) -> None:
         """Test latency calculation through policy."""
         config = PolicyConfig()
         policy = DefaultObservationPolicy(config)

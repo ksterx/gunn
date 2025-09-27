@@ -1,5 +1,20 @@
-"""Core simulation engine components."""
+# Core simulation engine components
 
-from .event_log import EventLog
+from .event_log import EventLog, EventLogEntry
+from .orchestrator import (
+    AgentHandle,
+    DefaultEffectValidator,
+    EffectValidator,
+    Orchestrator,
+    OrchestratorConfig,
+)
 
-__all__ = ["EventLog"]
+__all__ = [
+    "AgentHandle",
+    "DefaultEffectValidator",
+    "EffectValidator",
+    "EventLog",
+    "EventLogEntry",
+    "Orchestrator",
+    "OrchestratorConfig",
+]

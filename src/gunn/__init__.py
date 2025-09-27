@@ -7,7 +7,24 @@ concurrent execution, and intelligent interruption capabilities.
 
 __version__ = "0.1.0"
 
-# Core exports will be added as components are implemented
+# Core exports
+from .core import (
+    AgentHandle,
+    DefaultEffectValidator,
+    EffectValidator,
+    EventLog,
+    EventLogEntry,
+    Orchestrator,
+    OrchestratorConfig,
+)
+
 __all__ = [
+    "AgentHandle",
+    "DefaultEffectValidator",
+    "EffectValidator",
+    "EventLog",
+    "EventLogEntry",
+    "Orchestrator",
+    "OrchestratorConfig",
     "__version__",
 ]

@@ -31,7 +31,7 @@
 
 - [x] 4. Build EventLog with append-only storage
   - Implement EventLog class with thread-safe append operations
-  - Add hash chain checksum calculation in append() method with Optional[str] req_id
+  - Add hash chain checksum calculation in append() method with str | None req_id
   - Create get_entries_since() method for replay and catch-up
   - Implement validate_integrity() method for full chain verification
   - Write unit tests for concurrent appends and integrity validation
@@ -80,7 +80,7 @@
   - Write unit tests for various validation scenarios and edge cases
   - _Requirements: 1.5, 3.4, 10.3_
 
-- [ ] 7. Implement core Orchestrator functionality
+- [x] 7. Implement core Orchestrator functionality
   - Create Orchestrator class with world_id and dependency injection
   - Add register_agent() method with observation policy assignment
   - Implement deterministic ordering using (sim_time, priority, source_id, uuid) tuple
