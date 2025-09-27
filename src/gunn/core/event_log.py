@@ -102,13 +102,23 @@ class EventLog:
                 # Calculate checksum for this entry
                 checksum = chain_checksum(effect_dict, prev_checksum)
 
-                # Create log entry
+                # Create log entry with world_id in source_metadata for multi-tenant auditing
+                source_metadata = {"world_id": self.world_id}
+
+                # Add additional metadata if available
+                payload = effect_dict.get("payload")
+                if isinstance(payload, dict):
+                    if "adapter" in payload:
+                        source_metadata["adapter"] = payload["adapter"]
+                    if "priority" in payload:
+                        source_metadata["priority"] = payload["priority"]
+
                 entry = EventLogEntry(
                     global_seq=global_seq,
                     sim_time=effect_dict.get("sim_time", MonotonicClock.now()),  # type: ignore
                     wall_time=MonotonicClock.wall_time(),
                     effect=effect_dict,  # type: ignore
-                    source_metadata={"world_id": self.world_id},
+                    source_metadata=source_metadata,
                     checksum=checksum,
                     req_id=req_id,
                 )

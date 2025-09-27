@@ -12,6 +12,8 @@ Thank you for your interest in contributing to gunn! This document provides guid
 
 ### Getting Started
 
+> Use the `uv` helper so uv caches stay inside the repository (helps in sandboxed environments).
+
 1. **Fork and clone the repository**
    ```bash
    git clone https://github.com/your-username/gunn.git

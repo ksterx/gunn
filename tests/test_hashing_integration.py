@@ -154,7 +154,7 @@ def test_hash_chain_tamper_detection():
 
     # 1. Modify event data
     tampered_chain_1 = legitimate_chain.copy()
-    tampered_chain_1[1]["effect"]["file"] = "secret.txt"  # Change accessed file
+    tampered_chain_1[1]["effect"]["file"] = "secret.txt"  # type: ignore
     assert validate_hash_chain(tampered_chain_1) is False
 
     # 2. Insert malicious event
@@ -171,7 +171,8 @@ def test_hash_chain_tamper_detection():
             "global_seq": 2.5,  # Try to insert between existing events
             "effect": malicious_event,
             "checksum": chain_checksum(
-                malicious_event, legitimate_chain[1]["checksum"]
+                malicious_event,
+                legitimate_chain[1]["checksum"],  # type: ignore
             ),
         },
     )
@@ -187,7 +188,8 @@ def test_hash_chain_tamper_detection():
             "global_seq": 3,
             "effect": new_event,
             "checksum": chain_checksum(
-                new_event, legitimate_chain[0]["checksum"]
+                new_event,
+                legitimate_chain[0]["checksum"],  # type: ignore
             ),  # Wrong prev checksum
         }
     )
@@ -225,7 +227,7 @@ def test_large_scale_integrity():
     assert integrity_report["total_entries"] == 1000
 
     # Introduce corruption in the middle
-    large_chain[500]["effect"]["data"] = "corrupted_data"
+    large_chain[500]["effect"]["data"] = "corrupted_data"  # type: ignore
 
     # Should detect corruption
     corruption_indices = detect_corruption(large_chain)
@@ -268,19 +270,20 @@ def test_unicode_and_special_characters():
         # Regenerate checksum multiple times
         for _ in range(5):
             regenerated = chain_checksum(
-                effect, prev_checksum if entry["global_seq"] > 1 else None
+                effect,  # type: ignore
+                prev_checksum if int(entry["global_seq"]) > 1 else None,  # type: ignore
             )
             assert regenerated == stored_checksum
 
-        prev_checksum = stored_checksum
+        prev_checksum = str(stored_checksum)
 
 
 if __name__ == "__main__":
     # Run integration tests
-    test_requirement_7_1_hash_chain_integrity()
-    test_requirement_7_5_corruption_detection()
-    test_canonical_json_deterministic_ordering()
-    test_hash_chain_tamper_detection()
-    test_large_scale_integrity()
-    test_unicode_and_special_characters()
+    test_requirement_7_1_hash_chain_integrity()  # type: ignore
+    test_requirement_7_5_corruption_detection()  # type: ignore
+    test_canonical_json_deterministic_ordering()  # type: ignore
+    test_hash_chain_tamper_detection()  # type: ignore
+    test_large_scale_integrity()  # type: ignore
+    test_unicode_and_special_characters()  # type: ignore
     print("All integration tests passed!")

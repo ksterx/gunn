@@ -96,7 +96,7 @@
   - Write unit tests for agent isolation and non-blocking operations
   - _Requirements: 3.1, 3.2, 4.4, 6.1, 6.2_
 
-- [ ] 9. Add two-phase commit for intent processing
+- [x] 9. Add two-phase commit for intent processing
   - Implement submit_intent() method with idempotency checking using tuple keys and SQLite persistence
   - Add dedup_ttl configuration with cleanup job for expired entries (N minutes or N thousand entries)
   - Add TTL warmup guard for relaxed deduplication immediately after restart
@@ -106,7 +106,7 @@
   - Write unit tests for two-phase commit integrity, conflict resolution, and TTL cleanup
   - _Requirements: 3.3, 4.2, 4.3, 10.1, 10.2_
 
-- [ ] 9.1. Create dummy LLM for cancellation testing
+- [x] 9.1. Create dummy LLM for cancellation testing
   - Build mock LLM adapter that yields every 20-30ms for responsive cancellation
   - Add configurable generation time and token count for testing
   - Implement proper cancel token integration for 100ms SLO validation
@@ -123,7 +123,7 @@
   - Write unit tests for observation consistency, delivery timing, and priority completion
   - _Requirements: 2.2, 2.5, 6.4, 6.5_
 
-- [ ] 11. Add cancellation and staleness detection
+- [x] 11. Add cancellation and staleness detection
   - Implement issue_cancel_token() method with tuple key tracking
   - Create cancel_if_stale() method with configurable staleness threshold
   - Add automatic cancellation when context becomes outdated
@@ -131,7 +131,7 @@
   - Write unit tests for cancellation timing and staleness accuracy
   - _Requirements: 4.1, 4.2, 4.3, 4.7_
 
-- [ ] 12. Create error handling and recovery system
+- [-] 12. Create error handling and recovery system
   - Implement structured error types: StaleContextError, IntentConflictError, QuotaExceededError
   - Add ErrorRecoveryPolicy with configurable recovery strategies
   - Create CircuitBreaker class for fault tolerance with failure thresholds

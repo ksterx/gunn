@@ -33,6 +33,7 @@ class TestOrchestratorConfig:
         assert config.token_budget == 1000
         assert config.backpressure_policy == "defer"
         assert config.default_priority == 0
+        assert config.processing_idle_shutdown_ms == 250.0
 
     def test_custom_config(self) -> None:
         """Test custom configuration values."""
@@ -44,6 +45,7 @@ class TestOrchestratorConfig:
             token_budget=2000,
             backpressure_policy="shed_oldest",
             default_priority=10,
+            processing_idle_shutdown_ms=0.0,
         )
 
         assert config.max_agents == 50
@@ -53,6 +55,7 @@ class TestOrchestratorConfig:
         assert config.token_budget == 2000
         assert config.backpressure_policy == "shed_oldest"
         assert config.default_priority == 10
+        assert config.processing_idle_shutdown_ms == 0.0
 
 
 class TestDefaultEffectValidator:
@@ -81,10 +84,12 @@ class TestAgentHandle:
     """Test AgentHandle functionality."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
         config = OrchestratorConfig(max_agents=10)
-        return Orchestrator(config, world_id="test_world")
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        return orchestrator
 
     @pytest.fixture
     def agent_handle(self, orchestrator: Orchestrator) -> AgentHandle:
@@ -159,9 +164,11 @@ class TestOrchestrator:
         return OrchestratorConfig(max_agents=5, staleness_threshold=2)
 
     @pytest.fixture
-    def orchestrator(self, config: OrchestratorConfig) -> Orchestrator:
+    async def orchestrator(self, config: OrchestratorConfig) -> Orchestrator:
         """Create orchestrator for testing."""
-        return Orchestrator(config, world_id="test_world")
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        return orchestrator
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -249,6 +256,7 @@ class TestOrchestrator:
         """Test agent registration fails when max agents exceeded."""
         config = OrchestratorConfig(max_agents=2)
         orchestrator = Orchestrator(config)
+        await orchestrator.initialize()
 
         # Register up to max
         await orchestrator.register_agent("agent_1", observation_policy)
@@ -319,7 +327,10 @@ class TestOrchestrator:
 
         effect = entries[0].effect
         assert effect["kind"] == "TestEvent"
-        assert effect["payload"] == {"data": "test"}
+        assert effect["payload"]["data"] == "test"
+        assert (
+            effect["payload"]["priority"] == orchestrator.config.default_priority
+        )  # Priority completion
         assert effect["source_id"] == "test_source"
         assert effect["schema_version"] == "1.0.0"
         assert "uuid" in effect
@@ -446,6 +457,7 @@ class TestOrchestrator:
         orchestrator_with_failing_validator = Orchestrator(
             config, effect_validator=FailingValidator()
         )
+        await orchestrator_with_failing_validator.initialize()
 
         await orchestrator_with_failing_validator.register_agent(
             "test_agent", observation_policy
@@ -625,17 +637,19 @@ class TestOrchestrator:
         assert len(orchestrator.observation_policies) == 0
         assert len(orchestrator._per_agent_queues) == 0
         assert len(orchestrator._cancel_tokens) == 0
-        assert len(orchestrator._req_id_dedup) == 0
+        assert len(orchestrator._quota_tracker) == 0
 
 
 class TestDeterministicOrdering:
     """Test deterministic ordering requirements."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for ordering tests."""
         config = OrchestratorConfig()
-        return Orchestrator(config, world_id="ordering_test")
+        orchestrator = Orchestrator(config, world_id="ordering_test")
+        await orchestrator.initialize()
+        return orchestrator
 
     @pytest.mark.asyncio
     async def test_effect_ordering_fields(self, orchestrator: Orchestrator) -> None:
