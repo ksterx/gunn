@@ -88,7 +88,7 @@
   - Write unit tests for agent registration and basic orchestration
   - _Requirements: 1.1, 1.3, 1.4, 9.1, 9.3_
 
-- [ ] 8. Build AgentHandle for per-agent interface
+- [x] 8. Build AgentHandle for per-agent interface
   - Implement AgentHandle class with view_seq tracking as thin proxy to Orchestrator
   - Create next_observation() method using Orchestrator's TimedQueue
   - Add submit_intent() method with proper error handling
