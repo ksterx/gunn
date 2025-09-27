@@ -1,6 +1,5 @@
 """Integration tests for observation policies focusing on path stability and edge cases."""
 
-
 import pytest
 
 from gunn.policies.observation import DefaultObservationPolicy, PolicyConfig
@@ -21,7 +20,7 @@ class TestPathStability:
 
     def test_stable_paths_with_entity_reordering(
         self, policy: DefaultObservationPolicy
-    ):
+    ) -> None:
         """Test that JSON patch paths remain stable when entities are reordered."""
         # Create two world states with same entities but different ordering
         world_state_1 = WorldState(
@@ -66,7 +65,9 @@ class TestPathStability:
         assert patch["path"] == "/visible_entities/agent2/health"
         assert patch["value"] == 85
 
-    def test_stable_paths_with_entity_addition(self, policy: DefaultObservationPolicy):
+    def test_stable_paths_with_entity_addition(
+        self, policy: DefaultObservationPolicy
+    ) -> None:
         """Test stable paths when entities are added."""
         world_state_1 = WorldState(
             entities={
@@ -105,7 +106,9 @@ class TestPathStability:
         assert patch["path"] == "/visible_entities/agent3"
         assert patch["value"] == {"health": 80, "name": "Charlie"}
 
-    def test_stable_paths_with_entity_removal(self, policy: DefaultObservationPolicy):
+    def test_stable_paths_with_entity_removal(
+        self, policy: DefaultObservationPolicy
+    ) -> None:
         """Test stable paths when entities are removed."""
         world_state_1 = WorldState(
             entities={
@@ -148,7 +151,7 @@ class TestPathStability:
 class TestLargePatchFallback:
     """Test fallback to full snapshot for large changes."""
 
-    def test_max_patch_ops_threshold(self):
+    def test_max_patch_ops_threshold(self) -> None:
         """Test that large changes trigger fallback to full snapshot."""
         config = PolicyConfig(distance_limit=1000.0, max_patch_ops=3)
         policy = DefaultObservationPolicy(config)
@@ -201,7 +204,7 @@ class TestLargePatchFallback:
         assert len(entity_replace["value"]) == 6  # All entities
         assert len(relationship_replace["value"]) == 2  # All relationships
 
-    def test_small_changes_no_fallback(self):
+    def test_small_changes_no_fallback(self) -> None:
         """Test that small changes don't trigger fallback."""
         config = PolicyConfig(distance_limit=1000.0, max_patch_ops=10)
         policy = DefaultObservationPolicy(config)
@@ -289,7 +292,7 @@ class TestFilteringAccuracy:
             },
         )
 
-    def test_distance_filtering_accuracy(self, complex_world_state: WorldState):
+    def test_distance_filtering_accuracy(self, complex_world_state: WorldState) -> None:
         """Test accurate distance-based filtering."""
         config = PolicyConfig(distance_limit=25.0)
         policy = DefaultObservationPolicy(config)
@@ -306,7 +309,9 @@ class TestFilteringAccuracy:
         assert "agent3" not in view.visible_entities  # 30 units away
         assert "item2" not in view.visible_entities  # 100 units away
 
-    def test_field_visibility_filtering_accuracy(self, complex_world_state: WorldState):
+    def test_field_visibility_filtering_accuracy(
+        self, complex_world_state: WorldState
+    ) -> None:
         """Test accurate field-level visibility filtering."""
         config = PolicyConfig(
             distance_limit=100.0,
@@ -332,7 +337,9 @@ class TestFilteringAccuracy:
                     assert "name" in entity_data
                     assert "type" in entity_data
 
-    def test_relationship_filtering_accuracy(self, complex_world_state: WorldState):
+    def test_relationship_filtering_accuracy(
+        self, complex_world_state: WorldState
+    ) -> None:
         """Test accurate relationship filtering."""
         config = PolicyConfig(distance_limit=100.0)
         policy = DefaultObservationPolicy(config)
@@ -350,7 +357,9 @@ class TestFilteringAccuracy:
                     target_id in view.visible_entities
                 ), f"Relationship target {target_id} not visible"
 
-    def test_relationship_depth_filtering(self, complex_world_state: WorldState):
+    def test_relationship_depth_filtering(
+        self, complex_world_state: WorldState
+    ) -> None:
         """Test relationship depth filtering."""
         # Test with depth 1 (direct relationships only)
         config = PolicyConfig(
@@ -398,7 +407,7 @@ class TestEventObservationAccuracy:
 
     def test_spatial_event_observation_accuracy(
         self, policy: DefaultObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test accurate spatial event observation."""
         # Event close to agent1
         close_effect: Effect = {
@@ -428,7 +437,7 @@ class TestEventObservationAccuracy:
 
     def test_entity_specific_event_observation_accuracy(
         self, policy: DefaultObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test accurate entity-specific event observation."""
         # Event affecting agent2 (visible to agent1)
         visible_effect: Effect = {
@@ -463,7 +472,7 @@ class TestEventObservationAccuracy:
 
     def test_self_event_observation_accuracy(
         self, policy: DefaultObservationPolicy, world_state: WorldState
-    ):
+    ) -> None:
         """Test that agents always observe their own events."""
         self_effect: Effect = {
             "uuid": "test1",

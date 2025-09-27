@@ -1,6 +1,5 @@
 """Integration tests for hash chain utilities to verify requirements."""
 
-
 from gunn.utils.hashing import (
     canonical_json,
     chain_checksum,

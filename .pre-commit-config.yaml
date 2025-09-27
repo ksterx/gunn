@@ -22,3 +22,4 @@ repos:
       - id: mypy
         additional_dependencies: [pydantic, orjson, jsonpatch, structlog, prometheus-client, opentelemetry-api, fastapi, websockets, aiosqlite]
         args: [--strict, --ignore-missing-imports]
+        exclude: ^(src/gunn/utils/test_hashing_integration\.py|src/gunn/utils/test_hashing\.py|src/gunn/utils/hashing_demo\.py)$

@@ -52,7 +52,7 @@ def main() -> None:
     for i, event in enumerate(events):
         checksum = chain_checksum(event, prev_checksum)
         log_entries.append({"global_seq": i + 1, "effect": event, "checksum": checksum})
-        print(f"   Event {i+1}: {event['kind']}")
+        print(f"   Event {i + 1}: {event['kind']}")
         print(f"   Checksum: {checksum[:16]}...")
         prev_checksum = checksum
     print()

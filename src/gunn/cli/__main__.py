@@ -58,8 +58,11 @@ def print_version() -> None:
 
 def run_replay(args: list[str]) -> int:
     """Run the replay command."""
-    print("Replay functionality not yet implemented")
-    return 0
+    import asyncio
+
+    from gunn.cli.replay import run_replay_command
+
+    return asyncio.run(run_replay_command(args))
 
 
 if __name__ == "__main__":

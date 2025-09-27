@@ -326,7 +326,7 @@ class LLMAdapter:
         intent: Intent,
         world_context: dict,
         cancel_token: CancelToken
-    ) -> Optional[Effect]:
+    ) -> Effect | None:
         """Process an intent and generate appropriate response."""
 
         if intent["kind"] == "Speak":

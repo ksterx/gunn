@@ -29,15 +29,15 @@
   - Write unit tests for hash consistency and corruption detection
   - _Requirements: 7.1, 7.5_
 
-- [ ] 4. Build EventLog with append-only storage
+- [x] 4. Build EventLog with append-only storage
   - Implement EventLog class with thread-safe append operations
-  - Add hash chain checksum calculation in append() method with Optional[str] req_id
+  - Add hash chain checksum calculation in append() method with str | None req_id
   - Create get_entries_since() method for replay and catch-up
   - Implement validate_integrity() method for full chain verification
   - Write unit tests for concurrent appends and integrity validation
   - _Requirements: 1.2, 7.1, 7.3, 7.5_
 
-- [ ] 4.1. Add basic observability infrastructure
+- [x] 4.1. Add basic observability infrastructure
   - Initialize structlog for structured logging with global_seq, view_seq, agent_id, req_id
   - Add PII redaction processor for email, phone, tokens in structured logs
   - Use monotonic clock (loop.time()) for internal timing, wall-clock only for log display
@@ -46,7 +46,7 @@
   - Write unit tests for logging accuracy, PII redaction, and performance impact
   - _Requirements: 14.1, 14.4, 12.3_
 
-- [ ] 4.2. Create replay CLI utility with determinism
+- [x] 4.2. Create replay CLI utility with determinism
   - Build simple CLI tool for replaying event logs from specified ranges
   - Add replay --from 0 --to latest functionality for debugging
   - Record world_seed in EventLog for deterministic replay with fixed random sequences

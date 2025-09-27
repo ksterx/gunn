@@ -13,7 +13,7 @@ __all__ = [
     "TimedQueue",
     "canonical_json",
     "chain_checksum",
-    "validate_hash_chain",
     "detect_corruption",
+    "validate_hash_chain",
     "verify_sequence_integrity",
 ]
