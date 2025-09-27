@@ -8,7 +8,7 @@
   - Write basic project documentation and development setup guide
   - _Requirements: 13.1, 13.2, 13.3_
 
-- [ ] 1. Set up core data models and types
+- [x] 1. Set up core data models and types
   - Create Pydantic models for WorldState, View, and EventLogEntry with proper defaults
   - Define TypedDict types for Intent, Effect, EffectDraft, and ObservationDelta with schema versioning
   - Implement CancelToken class with reason tracking and wait functionality
