@@ -1,13 +1,11 @@
 """Unit tests for EventLog implementation."""
 
 import asyncio
-import tempfile
 import time
-from pathlib import Path
 
 import pytest
 
-from gunn.core.event_log import EventLog, EventLogEntry
+from gunn.core.event_log import EventLog
 from gunn.schemas.types import Effect
 from gunn.utils.hashing import chain_checksum
 
@@ -405,14 +403,13 @@ class TestEventLogPerformance:
     @pytest.mark.asyncio
     async def test_large_log_performance(self):
         """Test performance with large number of entries."""
-        import time
 
         event_log = EventLog()
 
         # Add many effects
         start_time = time.perf_counter()
         for i in range(1000):
-            effect = {
+            effect: Effect = {
                 "uuid": f"uuid-{i}",
                 "kind": "Move",
                 "payload": {"x": i, "y": i},
@@ -427,17 +424,17 @@ class TestEventLogPerformance:
 
         # Test retrieval performance
         start_time = time.perf_counter()
-        entries = await event_log.get_entries_range(0, 999)
+        entries = event_log.get_all_entries()
         retrieval_time = time.perf_counter() - start_time
 
         # Test integrity validation performance
         start_time = time.perf_counter()
-        is_valid = await event_log.validate_integrity()
+        validation_result = event_log.validate_integrity()
         validation_time = time.perf_counter() - start_time
 
         # Verify results
         assert len(entries) == 1000
-        assert is_valid is True
+        assert validation_result["valid"] is True
 
         # Performance assertions (generous limits for CI)
         assert append_time < 5.0, f"Append took too long: {append_time:.3f}s"

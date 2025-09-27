@@ -185,6 +185,7 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.3.0",
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
     "pyyaml>=6.0.3",
