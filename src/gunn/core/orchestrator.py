@@ -5,6 +5,7 @@ operations including event ingestion, view generation, intent validation,
 and observation distribution with deterministic ordering.
 """
 
+import asyncio
 import uuid
 from typing import Any, Literal, Protocol
 
@@ -12,6 +13,8 @@ from gunn.core.event_log import EventLog
 from gunn.policies.observation import ObservationPolicy
 from gunn.schemas.messages import WorldState
 from gunn.schemas.types import CancelToken, Effect, EffectDraft, Intent
+from gunn.storage.dedup_store import DedupStore
+from gunn.utils.errors import StaleContextError
 from gunn.utils.telemetry import MonotonicClock, get_logger
 from gunn.utils.timing import TimedQueue
 
@@ -132,6 +135,11 @@ class OrchestratorConfig:
         token_budget: int = 1000,
         backpressure_policy: str = "defer",
         default_priority: int = 0,
+        dedup_ttl_minutes: int = 60,
+        max_dedup_entries: int = 10000,
+        cleanup_interval_minutes: int = 10,
+        warmup_ttl_minutes: int = 5,
+        queue_depth_high_watermark: int = 1000,
     ):
         """Initialize orchestrator configuration.
 
@@ -143,6 +151,11 @@ class OrchestratorConfig:
             token_budget: Token budget for generation
             backpressure_policy: Policy for handling backpressure
             default_priority: Default priority when not specified
+            dedup_ttl_minutes: TTL for deduplication entries
+            max_dedup_entries: Maximum deduplication entries
+            cleanup_interval_minutes: Cleanup interval for dedup store
+            warmup_ttl_minutes: Warmup TTL for relaxed deduplication
+            queue_depth_high_watermark: High watermark for queue depth monitoring
         """
         self.max_agents = max_agents
         self.staleness_threshold = staleness_threshold
@@ -151,6 +164,11 @@ class OrchestratorConfig:
         self.token_budget = token_budget
         self.backpressure_policy = backpressure_policy
         self.default_priority = default_priority
+        self.dedup_ttl_minutes = dedup_ttl_minutes
+        self.max_dedup_entries = max_dedup_entries
+        self.cleanup_interval_minutes = cleanup_interval_minutes
+        self.warmup_ttl_minutes = warmup_ttl_minutes
+        self.queue_depth_high_watermark = queue_depth_high_watermark
 
 
 class Orchestrator:
@@ -173,6 +191,7 @@ class Orchestrator:
         config: OrchestratorConfig,
         world_id: str = "default",
         effect_validator: EffectValidator | None = None,
+        dedup_store: DedupStore | None = None,
     ):
         """Initialize orchestrator with configuration and dependencies.
 
@@ -180,6 +199,7 @@ class Orchestrator:
             config: Orchestrator configuration
             world_id: Identifier for this world instance
             effect_validator: Optional custom effect validator
+            dedup_store: Optional custom deduplication store
         """
         self.world_id = world_id
         self.config = config
@@ -191,16 +211,26 @@ class Orchestrator:
         )
         self.agent_handles: dict[str, AgentHandle] = {}
 
+        # Deduplication store
+        self.dedup_store: DedupStore = dedup_store or DedupStore(
+            dedup_ttl_minutes=config.dedup_ttl_minutes,
+            max_entries=config.max_dedup_entries,
+            cleanup_interval_minutes=config.cleanup_interval_minutes,
+            warmup_ttl_minutes=config.warmup_ttl_minutes,
+        )
+
         # Internal state
         self._global_seq: int = 0
         self._cancel_tokens: dict[
             tuple[str, str, str], CancelToken
         ] = {}  # (world_id, agent_id, req_id)
-        self._req_id_dedup: dict[
-            tuple[str, str, str], int
-        ] = {}  # (world_id, agent_id, req_id) -> global_seq
         self._per_agent_queues: dict[str, TimedQueue] = {}  # Timed delivery queues
         self._sim_time_authority: str = "none"  # Which adapter controls sim_time
+        self._initialized: bool = False
+
+        # Processing pipeline locks for fairness
+        self._processing_lock = asyncio.Lock()
+        self._agent_processing_order: list[str] = []  # Round-robin order
 
         # Logging
         self._logger = get_logger("gunn.orchestrator", world_id=world_id)
@@ -210,7 +240,19 @@ class Orchestrator:
             world_id=world_id,
             max_agents=config.max_agents,
             sim_time_authority=self._sim_time_authority,
+            dedup_ttl_minutes=config.dedup_ttl_minutes,
+            staleness_threshold=config.staleness_threshold,
         )
+
+    async def initialize(self) -> None:
+        """Initialize orchestrator and dependencies."""
+        if self._initialized:
+            return
+
+        await self.dedup_store.initialize()
+        self._initialized = True
+
+        self._logger.info("Orchestrator initialization complete")
 
     def set_sim_time_authority(
         self, authority: Literal["unity", "unreal", "none"]
@@ -311,7 +353,7 @@ class Orchestrator:
         )
 
     async def submit_intent(self, intent: Intent) -> str:
-        """Two-phase commit: idempotency check → validate intent → create effect.
+        """Two-phase commit: idempotency → staleness → quota → backpressure → priority → fairness → validator → commit.
 
         Args:
             intent: Intent to process
@@ -321,7 +363,13 @@ class Orchestrator:
 
         Raises:
             ValueError: If intent is invalid
+            StaleContextError: If intent context is stale
+            QuotaExceededError: If quota limits exceeded
+            ValidationError: If intent validation fails
         """
+        if not self._initialized:
+            raise RuntimeError("Orchestrator not initialized")
+
         # Validate intent structure
         if not intent.get("req_id"):
             raise ValueError("Intent must have 'req_id' field")
@@ -332,11 +380,22 @@ class Orchestrator:
 
         req_id = intent["req_id"]
         agent_id = intent["agent_id"]
+        context_seq = intent.get("context_seq", 0)
 
-        # Check idempotency
-        dedup_key = (self.world_id, agent_id, req_id)
-        if dedup_key in self._req_id_dedup:
-            existing_seq = self._req_id_dedup[dedup_key]
+        self._logger.debug(
+            "Processing intent",
+            req_id=req_id,
+            agent_id=agent_id,
+            intent_kind=intent["kind"],
+            context_seq=context_seq,
+        )
+
+        # Phase 1: Idempotency check using persistent store
+        existing_seq = await self.dedup_store.check_and_record(
+            self.world_id, agent_id, req_id, self._global_seq + 1
+        )
+
+        if existing_seq is not None:
             self._logger.info(
                 "Intent already processed (idempotent)",
                 req_id=req_id,
@@ -345,33 +404,146 @@ class Orchestrator:
             )
             return req_id
 
-        # Validate intent using effect validator
-        if not self.effect_validator.validate_intent(intent, self.world_state):
-            raise ValueError(f"Intent validation failed for {req_id}")
+        # Phase 2: Staleness detection
+        await self._check_staleness(agent_id, req_id, context_seq)
 
-        # Create effect from intent
-        effect_draft: EffectDraft = {
-            "kind": intent["kind"],
-            "payload": intent["payload"],
-            "source_id": agent_id,
-            "schema_version": intent.get("schema_version", "1.0.0"),
-        }
+        # Phase 3: Processing pipeline with fairness
+        async with self._processing_lock:
+            # Quota check
+            await self._check_quota(agent_id, intent)
 
-        # Broadcast the effect (this will assign the global_seq)
-        await self.broadcast_event(effect_draft)
+            # Backpressure check
+            await self._check_backpressure(agent_id)
 
-        # Record for idempotency using the current global_seq
-        self._req_id_dedup[dedup_key] = self._global_seq
+            # Priority and fairness handling
+            await self._handle_priority_and_fairness(agent_id, intent)
 
-        self._logger.info(
-            "Intent processed",
-            req_id=req_id,
-            agent_id=agent_id,
-            intent_kind=intent["kind"],
-            global_seq=self._global_seq,
-        )
+            # Validation
+            if not self.effect_validator.validate_intent(intent, self.world_state):
+                from gunn.utils.errors import ValidationError
 
-        return req_id
+                raise ValidationError(intent, ["Effect validator rejected intent"])
+
+            # Phase 4: Commit - create and broadcast effect
+            effect_draft: EffectDraft = {
+                "kind": intent["kind"],
+                "payload": intent["payload"],
+                "source_id": agent_id,
+                "schema_version": intent.get("schema_version", "1.0.0"),
+            }
+
+            # Apply priority completion if not specified
+            if "priority" not in effect_draft["payload"]:
+                effect_draft["payload"]["priority"] = intent.get(
+                    "priority", self.config.default_priority
+                )
+
+            # Broadcast the effect (this will assign the global_seq)
+            await self.broadcast_event(effect_draft)
+
+            self._logger.info(
+                "Intent processed successfully",
+                req_id=req_id,
+                agent_id=agent_id,
+                intent_kind=intent["kind"],
+                global_seq=self._global_seq,
+                context_seq=context_seq,
+            )
+
+            return req_id
+
+    async def _check_staleness(
+        self, agent_id: str, req_id: str, context_seq: int
+    ) -> None:
+        """Check if intent context is stale.
+
+        Args:
+            agent_id: Agent identifier
+            req_id: Request identifier
+            context_seq: Context sequence from intent
+
+        Raises:
+            StaleContextError: If context is stale
+        """
+        agent_handle = self.agent_handles.get(agent_id)
+        if not agent_handle:
+            # Agent not registered, can't check staleness
+            return
+
+        latest_seq = self._global_seq
+        staleness = latest_seq - context_seq
+
+        if staleness > self.config.staleness_threshold:
+            self._logger.info(
+                "Intent rejected due to staleness",
+                agent_id=agent_id,
+                req_id=req_id,
+                context_seq=context_seq,
+                latest_seq=latest_seq,
+                staleness=staleness,
+                threshold=self.config.staleness_threshold,
+            )
+            raise StaleContextError(req_id, context_seq, latest_seq)
+
+    async def _check_quota(self, agent_id: str, intent: Intent) -> None:
+        """Check quota limits for agent.
+
+        Args:
+            agent_id: Agent identifier
+            intent: Intent to check
+
+        Raises:
+            QuotaExceededError: If quota limits exceeded
+        """
+        # TODO: Implement actual quota checking
+        # For now, this is a placeholder that always passes
+        pass
+
+    async def _check_backpressure(self, agent_id: str) -> None:
+        """Check backpressure conditions.
+
+        Args:
+            agent_id: Agent identifier
+
+        Raises:
+            BackpressureError: If backpressure limits exceeded
+        """
+        # Check queue depth for this agent
+        if agent_id in self._per_agent_queues:
+            queue = self._per_agent_queues[agent_id]
+            queue_depth = queue.qsize() if hasattr(queue, "qsize") else 0
+
+            if queue_depth > self.config.queue_depth_high_watermark:
+                from gunn.utils.errors import BackpressureError
+
+                raise BackpressureError(
+                    agent_id=agent_id,
+                    queue_type="observation",
+                    current_depth=queue_depth,
+                    threshold=self.config.queue_depth_high_watermark,
+                    policy=self.config.backpressure_policy,
+                )
+
+    async def _handle_priority_and_fairness(
+        self, agent_id: str, intent: Intent
+    ) -> None:
+        """Handle priority and fairness using Weighted Round Robin.
+
+        Args:
+            agent_id: Agent identifier
+            intent: Intent being processed
+        """
+        # Update round-robin order
+        if agent_id not in self._agent_processing_order:
+            self._agent_processing_order.append(agent_id)
+        else:
+            # Move to end for round-robin fairness
+            self._agent_processing_order.remove(agent_id)
+            self._agent_processing_order.append(agent_id)
+
+        # TODO: Implement actual priority weighting and fairness delays
+        # For now, this ensures round-robin ordering
+        pass
 
     def issue_cancel_token(self, agent_id: str, req_id: str) -> CancelToken:
         """Issue cancellation token for generation tracking.
@@ -485,15 +657,22 @@ class Orchestrator:
 
     async def shutdown(self) -> None:
         """Shutdown orchestrator and clean up resources."""
+        if not self._initialized:
+            return
+
         # Close all agent queues
         for queue in self._per_agent_queues.values():
             await queue.close()
+
+        # Close deduplication store
+        await self.dedup_store.close()
 
         # Clear state
         self.agent_handles.clear()
         self.observation_policies.clear()
         self._per_agent_queues.clear()
         self._cancel_tokens.clear()
-        self._req_id_dedup.clear()
+        self._agent_processing_order.clear()
+        self._initialized = False
 
         self._logger.info("Orchestrator shutdown complete")

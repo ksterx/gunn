@@ -5,13 +5,13 @@ and integration with TimedQueue for observation delivery.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from gunn.core.orchestrator import AgentHandle, Orchestrator, OrchestratorConfig
 from gunn.policies.observation import DefaultObservationPolicy, PolicyConfig
-from gunn.schemas.types import CancelToken, Intent, ObservationDelta
+from gunn.schemas.types import Intent
 from gunn.utils.timing import TimedQueue
 
 
@@ -19,10 +19,15 @@ class TestAgentHandleInitialization:
     """Test AgentHandle initialization and basic properties."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
-        return Orchestrator(config, world_id="test_world")
+        config = OrchestratorConfig(
+            max_agents=10, staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     def test_initialization(self, orchestrator: Orchestrator) -> None:
         """Test AgentHandle initialization with valid parameters."""
@@ -59,10 +64,15 @@ class TestAgentHandleObservations:
     """Test observation handling through AgentHandle."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
-        return Orchestrator(config, world_id="test_world")
+        config = OrchestratorConfig(
+            max_agents=10, staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -76,7 +86,9 @@ class TestAgentHandleObservations:
         """Test next_observation raises error for unregistered agent."""
         handle = AgentHandle("unregistered_agent", orchestrator)
 
-        with pytest.raises(RuntimeError, match="Agent unregistered_agent is not registered"):
+        with pytest.raises(
+            RuntimeError, match="Agent unregistered_agent is not registered"
+        ):
             await handle.next_observation()
 
     @pytest.mark.asyncio
@@ -90,7 +102,9 @@ class TestAgentHandleObservations:
         # Create a mock observation delta
         mock_delta = {
             "view_seq": 5,
-            "patches": [{"op": "add", "path": "/entities/1", "value": {"type": "player"}}],
+            "patches": [
+                {"op": "add", "path": "/entities/1", "value": {"type": "player"}}
+            ],
             "context_digest": "abc123",
             "schema_version": "1.0.0",
         }
@@ -112,7 +126,12 @@ class TestAgentHandleObservations:
         """Test view_seq is updated from dict-style delta."""
         handle = await orchestrator.register_agent("test_agent", observation_policy)
 
-        mock_delta = {"view_seq": 10, "patches": [], "context_digest": "def456", "schema_version": "1.0.0"}
+        mock_delta = {
+            "view_seq": 10,
+            "patches": [],
+            "context_digest": "def456",
+            "schema_version": "1.0.0",
+        }
 
         queue = orchestrator._per_agent_queues["test_agent"]
         await queue.put_in(0.001, mock_delta)
@@ -194,10 +213,15 @@ class TestAgentHandleIntentSubmission:
     """Test intent submission through AgentHandle."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
-        return Orchestrator(config, world_id="test_world")
+        config = OrchestratorConfig(
+            max_agents=10, staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -283,10 +307,15 @@ class TestAgentHandleCancellation:
     """Test cancellation functionality through AgentHandle."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
-        return Orchestrator(config, world_id="test_world")
+        config = OrchestratorConfig(
+            max_agents=10, staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.mark.asyncio
     async def test_cancel_existing_token(self, orchestrator: Orchestrator) -> None:
@@ -352,10 +381,15 @@ class TestAgentHandleIsolation:
     """Test agent isolation and non-blocking operations."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
-        return Orchestrator(config, world_id="test_world")
+        config = OrchestratorConfig(
+            max_agents=10, staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -416,7 +450,7 @@ class TestAgentHandleIsolation:
 
         # Agent B should not be affected and should timeout quickly
         queue_b = orchestrator._per_agent_queues["agent_b"]
-        
+
         # Test that agent B's queue is empty
         assert queue_b.empty()
 
@@ -446,7 +480,9 @@ class TestAgentHandleIsolation:
             intents.append(intent)
 
         # Submit all intents concurrently
-        tasks = [handle.submit_intent(intent) for handle, intent in zip(handles, intents)]
+        tasks = [
+            handle.submit_intent(intent) for handle, intent in zip(handles, intents)
+        ]
         req_ids = await asyncio.gather(*tasks)
 
         # Verify all succeeded
@@ -462,9 +498,7 @@ class TestAgentHandleIsolation:
             assert entry.effect["payload"]["agent_index"] == i
 
     @pytest.mark.asyncio
-    async def test_concurrent_cancellation(
-        self, orchestrator: Orchestrator
-    ) -> None:
+    async def test_concurrent_cancellation(self, orchestrator: Orchestrator) -> None:
         """Test concurrent cancellation operations."""
         handles = []
         for i in range(3):
@@ -491,10 +525,15 @@ class TestAgentHandleErrorHandling:
     """Test error handling in AgentHandle operations."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
-        return Orchestrator(config, world_id="test_world")
+        config = OrchestratorConfig(
+            max_agents=10, staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -539,7 +578,9 @@ class TestAgentHandleErrorHandling:
         with pytest.raises(ValueError, match="Intent must have 'req_id' field"):
             await handle.submit_intent(invalid_intent)
 
-    def test_agent_handle_string_representation(self, orchestrator: Orchestrator) -> None:
+    def test_agent_handle_string_representation(
+        self, orchestrator: Orchestrator
+    ) -> None:
         """Test string representation of AgentHandle for debugging."""
         handle = AgentHandle("test_agent", orchestrator)
 
@@ -569,10 +610,15 @@ class TestAgentHandlePerformance:
     """Test performance characteristics of AgentHandle operations."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=100)
-        return Orchestrator(config, world_id="perf_test")
+        config = OrchestratorConfig(
+            max_agents=100, staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="perf_test")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -589,7 +635,7 @@ class TestAgentHandlePerformance:
         # Schedule observation for immediate delivery
         queue = orchestrator._per_agent_queues["test_agent"]
         start_time = asyncio.get_running_loop().time()
-        
+
         await queue.put_in(0.001, {"view_seq": 1, "data": "test"})
 
         # Get observation and measure time
@@ -597,7 +643,7 @@ class TestAgentHandlePerformance:
         end_time = asyncio.get_running_loop().time()
 
         delivery_time = end_time - start_time
-        
+
         # Should be delivered quickly (within 50ms for this test)
         assert delivery_time < 0.05
         assert delta["data"] == "test"
@@ -616,7 +662,7 @@ class TestAgentHandlePerformance:
 
         # Submit intents from all agents concurrently
         start_time = asyncio.get_running_loop().time()
-        
+
         tasks = []
         for i, handle in enumerate(handles):
             intent: Intent = {

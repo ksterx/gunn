@@ -106,7 +106,7 @@
   - Write unit tests for two-phase commit integrity, conflict resolution, and TTL cleanup
   - _Requirements: 3.3, 4.2, 4.3, 10.1, 10.2_
 
-- [ ] 9.1. Create dummy LLM for cancellation testing
+- [x] 9.1. Create dummy LLM for cancellation testing
   - Build mock LLM adapter that yields every 20-30ms for responsive cancellation
   - Add configurable generation time and token count for testing
   - Implement proper cancel token integration for 100ms SLO validation

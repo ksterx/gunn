@@ -17,6 +17,7 @@ from gunn.core.orchestrator import (
 from gunn.policies.observation import DefaultObservationPolicy, PolicyConfig
 from gunn.schemas.messages import WorldState
 from gunn.schemas.types import CancelToken, EffectDraft, Intent
+from gunn.utils.errors import ValidationError
 
 
 class TestOrchestratorConfig:
@@ -81,10 +82,15 @@ class TestAgentHandle:
     """Test AgentHandle functionality."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
-        return Orchestrator(config, world_id="test_world")
+        config = OrchestratorConfig(
+            max_agents=10, staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.fixture
     def agent_handle(self, orchestrator: Orchestrator) -> AgentHandle:
@@ -156,12 +162,17 @@ class TestOrchestrator:
     @pytest.fixture
     def config(self) -> OrchestratorConfig:
         """Create test configuration."""
-        return OrchestratorConfig(max_agents=5, staleness_threshold=2)
+        return OrchestratorConfig(
+            max_agents=5, staleness_threshold=1000
+        )  # High threshold for existing tests
 
     @pytest.fixture
-    def orchestrator(self, config: OrchestratorConfig) -> Orchestrator:
+    async def orchestrator(self, config: OrchestratorConfig) -> Orchestrator:
         """Create orchestrator for testing."""
-        return Orchestrator(config, world_id="test_world")
+        orchestrator = Orchestrator(config, world_id="test_world")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -401,7 +412,8 @@ class TestOrchestrator:
 
         effect = entries[0].effect
         assert effect["kind"] == "Speak"
-        assert effect["payload"] == {"text": "Hello"}
+        assert effect["payload"]["text"] == "Hello"
+        assert effect["payload"]["priority"] == 0  # Priority should be added
         assert effect["source_id"] == "test_agent"
 
     @pytest.mark.asyncio
@@ -442,10 +454,11 @@ class TestOrchestrator:
             def validate_intent(self, intent: Intent, world_state: WorldState) -> bool:
                 return False
 
-        config = OrchestratorConfig()
+        config = OrchestratorConfig(staleness_threshold=1000)
         orchestrator_with_failing_validator = Orchestrator(
             config, effect_validator=FailingValidator()
         )
+        await orchestrator_with_failing_validator.initialize()
 
         await orchestrator_with_failing_validator.register_agent(
             "test_agent", observation_policy
@@ -461,8 +474,11 @@ class TestOrchestrator:
             "schema_version": "1.0.0",
         }
 
-        with pytest.raises(ValueError, match="Intent validation failed for test_req_1"):
-            await orchestrator_with_failing_validator.submit_intent(intent)
+        try:
+            with pytest.raises(ValidationError):  # Updated to use ValidationError
+                await orchestrator_with_failing_validator.submit_intent(intent)
+        finally:
+            await orchestrator_with_failing_validator.shutdown()
 
     @pytest.mark.asyncio
     async def test_submit_intent_missing_fields(
@@ -577,21 +593,33 @@ class TestOrchestrator:
 
     @pytest.mark.asyncio
     async def test_cancel_if_stale_threshold_exceeded(
-        self, orchestrator: Orchestrator, observation_policy: DefaultObservationPolicy
+        self, observation_policy: DefaultObservationPolicy
     ) -> None:
         """Test cancel_if_stale when staleness threshold is exceeded."""
-        # Register agent
-        handle = await orchestrator.register_agent("test_agent", observation_policy)
-        handle.view_seq = 5
+        # Create orchestrator with low staleness threshold for this test
+        config = OrchestratorConfig(max_agents=5, staleness_threshold=2)
+        test_orchestrator = Orchestrator(config, world_id="stale_test")
+        await test_orchestrator.initialize()
 
-        # Issue token
-        token = orchestrator.issue_cancel_token("test_agent", "test_req")
+        try:
+            # Register agent
+            handle = await test_orchestrator.register_agent(
+                "test_agent", observation_policy
+            )
+            handle.view_seq = 5
 
-        # Check staleness (new_seq=10, current=5, staleness=5, threshold=2)
-        result = await orchestrator.cancel_if_stale("test_agent", "test_req", 10)
-        assert result is True
-        assert token.cancelled
-        assert token.reason is not None and "stale_due_to_seq_gap_5" in token.reason
+            # Issue token
+            token = test_orchestrator.issue_cancel_token("test_agent", "test_req")
+
+            # Check staleness (new_seq=10, current=5, staleness=5, threshold=2)
+            result = await test_orchestrator.cancel_if_stale(
+                "test_agent", "test_req", 10
+            )
+            assert result is True
+            assert token.cancelled
+            assert token.reason is not None and "stale_due_to_seq_gap_5" in token.reason
+        finally:
+            await test_orchestrator.shutdown()
 
     def test_get_world_state(self, orchestrator: Orchestrator) -> None:
         """Test world state access."""
@@ -625,17 +653,23 @@ class TestOrchestrator:
         assert len(orchestrator.observation_policies) == 0
         assert len(orchestrator._per_agent_queues) == 0
         assert len(orchestrator._cancel_tokens) == 0
-        assert len(orchestrator._req_id_dedup) == 0
+        assert len(orchestrator._agent_processing_order) == 0
+        assert orchestrator._initialized == False
 
 
 class TestDeterministicOrdering:
     """Test deterministic ordering requirements."""
 
     @pytest.fixture
-    def orchestrator(self) -> Orchestrator:
+    async def orchestrator(self) -> Orchestrator:
         """Create orchestrator for ordering tests."""
-        config = OrchestratorConfig()
-        return Orchestrator(config, world_id="ordering_test")
+        config = OrchestratorConfig(
+            staleness_threshold=1000
+        )  # High threshold for existing tests
+        orchestrator = Orchestrator(config, world_id="ordering_test")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.mark.asyncio
     async def test_effect_ordering_fields(self, orchestrator: Orchestrator) -> None:

@@ -22,14 +22,17 @@ class TestOrchestratorIntegration:
         """Create test configuration."""
         return OrchestratorConfig(
             max_agents=10,
-            staleness_threshold=1,
+            staleness_threshold=1000,  # High threshold for existing tests
             default_priority=5,
         )
 
     @pytest.fixture
-    def orchestrator(self, config: OrchestratorConfig) -> Orchestrator:
+    async def orchestrator(self, config: OrchestratorConfig) -> Orchestrator:
         """Create orchestrator for integration testing."""
-        return Orchestrator(config, world_id="integration_test")
+        orchestrator = Orchestrator(config, world_id="integration_test")
+        await orchestrator.initialize()
+        yield orchestrator
+        await orchestrator.shutdown()
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -143,9 +146,9 @@ class TestOrchestratorIntegration:
         agent.view_seq = 5
         stale_token = orchestrator.issue_cancel_token("test_agent", "stale_task_1")
 
-        # Trigger staleness check (new_seq=10, current=5, staleness=5, threshold=1)
+        # Trigger staleness check (new_seq=2000, current=5, staleness=1995, threshold=1000)
         was_cancelled = await orchestrator.cancel_if_stale(
-            "test_agent", "stale_task_1", 10
+            "test_agent", "stale_task_1", 2000
         )
         assert was_cancelled
         assert stale_token.cancelled
@@ -183,7 +186,9 @@ class TestOrchestratorIntegration:
         entries = orchestrator.event_log.get_all_entries()
         assert len(entries) == 1
         assert entries[0].effect["kind"] == "Move"
-        assert entries[0].effect["payload"] == {"x": 10, "y": 20}
+        assert entries[0].effect["payload"]["x"] == 10
+        assert entries[0].effect["payload"]["y"] == 20
+        assert entries[0].effect["payload"]["priority"] == 0  # Priority should be added
 
     @pytest.mark.asyncio
     async def test_deterministic_ordering_under_load(
@@ -306,8 +311,11 @@ class TestOrchestratorIntegration:
         # Verify state before shutdown
         assert orchestrator.get_agent_count() == 3
         assert len(orchestrator._cancel_tokens) == 3
-        assert len(orchestrator._req_id_dedup) == 3
         assert orchestrator.event_log.get_entry_count() == 3
+
+        # Check dedup store has entries
+        stats = await orchestrator.dedup_store.get_stats()
+        assert stats["total_entries"] == 3
 
         # Shutdown
         await orchestrator.shutdown()
@@ -315,7 +323,7 @@ class TestOrchestratorIntegration:
         # Verify cleanup (but event log should remain)
         assert orchestrator.get_agent_count() == 0
         assert len(orchestrator._cancel_tokens) == 0
-        assert len(orchestrator._req_id_dedup) == 0
+        # Note: dedup_store entries may persist after shutdown for TTL-based cleanup
         assert orchestrator.event_log.get_entry_count() == 3  # Log persists
 
     @pytest.mark.asyncio
