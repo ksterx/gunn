@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gunn-config
+  namespace: gunn
+  labels:
+    app.kubernetes.io/name: gunn
+    app.kubernetes.io/component: config
+data:
+  gunn.yaml: |
+    environment: production
+    debug: false
+
+    features:
+      latency_simulation: true
+      backpressure_management: true
+      staleness_detection: true
+      cancellation_tokens: true
+      telemetry: true
+      metrics_export: true
+      structured_logging: true
+      pii_redaction: true
+      memory_management: true
+      log_compaction: true
+      view_caching: true
+      rate_limiting: true
+      authentication: false
+      authorization: false
+      distributed_mode: false
+      gpu_acceleration: false
+
+    logging:
+      level: INFO
+      format: json
+      enable_pii_redaction: true
+      log_file: null
+      max_file_size_mb: 100
+      backup_count: 5
+
+    metrics:
+      enabled: true
+      port: 8000
+      path: /metrics
+      export_interval_seconds: 15.0
+      include_feature_flags: true
+
+    security:
+      enable_auth: false
+      rate_limit_per_minute: 1000
+      max_request_size_mb: 10
+      allowed_origins: ["*"]
+
+    database:
+      url: sqlite:///data/gunn.db
+      pool_size: 10
+      max_overflow: 20
+      pool_timeout: 30
+      echo: false
+
+    orchestrator:
+      max_agents: 1000
+      staleness_threshold: 0
+      debounce_ms: 100.0
+      deadline_ms: 5000.0
+      token_budget: 1000
+      backpressure_policy: defer
+      default_priority: 0
+      dedup_ttl_minutes: 60
+      max_dedup_entries: 10000
+      dedup_cleanup_interval_minutes: 10
+      dedup_warmup_minutes: 5
+      max_queue_depth: 100
+      quota_intents_per_minute: 60
+      quota_tokens_per_minute: 10000
+      use_in_memory_dedup: false
+      processing_idle_shutdown_ms: 250.0
+      max_log_entries: 10000
+      view_cache_size: 1000
+      compaction_threshold: 5000
+      snapshot_interval: 1000
+      max_snapshots: 10
+      memory_check_interval_seconds: 60.0
+      auto_compaction_enabled: true

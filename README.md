@@ -148,6 +148,18 @@ async for token in adapter.stream_generate(prompt, cancel_token):
     print(token)
 ```
 
+## Documentation
+
+The documentation site is built with Sphinx and published from the `docs/_build/html` directory.
+Build it locally with:
+
+```bash
+uv sync --group docs
+uv run sphinx-build -b html docs docs/_build/html
+```
+
+When targeting GitHub Pages, instruct Pages to serve from `docs/_build/html`.
+
 ## Configuration
 
 The system supports extensive configuration through environment variables and config files:

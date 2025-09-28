@@ -5,6 +5,8 @@ This module provides centralized observability infrastructure including:
 - Prometheus metrics collection
 - OpenTelemetry tracing setup
 - Performance measurement utilities
+- Memory usage tracking and reporting
+- Bandwidth/CPU measurement for patch operations
 """
 
 import asyncio
@@ -12,10 +14,17 @@ import re
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Optional
 
+import psutil
 import structlog
-from prometheus_client import Counter, Histogram, start_http_server
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from structlog.processors import JSONRenderer
 
 # Prometheus metrics
@@ -66,6 +75,73 @@ ERROR_RECOVERY_ACTIONS = Counter(
     "gunn_error_recovery_actions_total",
     "Error recovery actions taken",
     ["error_type", "recovery_action", "agent_id"],
+)
+
+# Enhanced metrics for Task 15
+INTENT_THROUGHPUT = Counter(
+    "gunn_intents_processed_total",
+    "Total number of intents processed",
+    ["agent_id", "intent_kind", "status"],
+)
+
+CONFLICT_RATE = Counter(
+    "gunn_conflicts_total",
+    "Total number of intent conflicts",
+    ["agent_id", "conflict_type"],
+)
+
+OBSERVATION_DELIVERY_LATENCY = Histogram(
+    "gunn_observation_delivery_duration_seconds",
+    "Time from effect creation to observation delivery",
+    ["agent_id"],
+    buckets=[0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0],
+)
+
+PATCH_OPERATIONS_COUNT = Histogram(
+    "gunn_patch_operations_count",
+    "Number of JSON patch operations in observation deltas",
+    ["agent_id"],
+    buckets=[0, 1, 5, 10, 25, 50, 100, 250, 500, 1000],
+)
+
+PATCH_FALLBACK_EVENTS = Counter(
+    "gunn_patch_fallback_total",
+    "Number of times patch operations exceeded max_patch_ops and fell back to full snapshot",
+    ["agent_id"],
+)
+
+MEMORY_USAGE_BYTES = Gauge(
+    "gunn_memory_usage_bytes",
+    "Memory usage in bytes",
+    ["component"],
+)
+
+CPU_USAGE_PERCENT = Gauge(
+    "gunn_cpu_usage_percent",
+    "CPU usage percentage",
+    ["component"],
+)
+
+BANDWIDTH_BYTES = Counter(
+    "gunn_bandwidth_bytes_total",
+    "Total bytes transferred",
+    ["direction", "component"],
+)
+
+GLOBAL_SEQ_GAUGE = Gauge(
+    "gunn_global_seq_current",
+    "Current global sequence number",
+)
+
+VIEW_SEQ_GAUGE = Gauge(
+    "gunn_view_seq_current",
+    "Current view sequence number by agent",
+    ["agent_id"],
+)
+
+ACTIVE_AGENTS_GAUGE = Gauge(
+    "gunn_active_agents_count",
+    "Number of currently active agents",
 )
 
 # PII patterns for redaction
@@ -158,6 +234,66 @@ def setup_logging(log_level: str = "INFO", enable_pii_redaction: bool = True) ->
     )
 
 
+def setup_tracing(
+    service_name: str = "gunn",
+    otlp_endpoint: Optional[str] = None,
+    enable_fastapi_instrumentation: bool = True,
+) -> None:
+    """Initialize OpenTelemetry tracing.
+
+    Args:
+        service_name: Name of the service for tracing
+        otlp_endpoint: OTLP endpoint URL (if None, uses console exporter)
+        enable_fastapi_instrumentation: Whether to enable FastAPI auto-instrumentation
+    """
+    # Create resource with service information
+    resource = Resource.create(
+        {
+            "service.name": service_name,
+            "service.version": "0.1.0",  # TODO: Get from package metadata
+        }
+    )
+
+    # Set up tracer provider
+    tracer_provider = TracerProvider(resource=resource)
+    trace.set_tracer_provider(tracer_provider)
+
+    # Configure exporter
+    if otlp_endpoint:
+        # Use OTLP exporter for production
+        exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
+    else:
+        # Use console exporter for development
+        from opentelemetry.sdk.trace.export import ConsoleSpanExporter
+
+        exporter = ConsoleSpanExporter()
+
+    # Add span processor
+    span_processor = BatchSpanProcessor(exporter)
+    tracer_provider.add_span_processor(span_processor)
+
+    # Enable FastAPI instrumentation if requested
+    if enable_fastapi_instrumentation:
+        try:
+            FastAPIInstrumentor.instrument()
+        except Exception as e:
+            get_logger("gunn.telemetry").warning(
+                "Failed to instrument FastAPI", error=str(e)
+            )
+
+
+def get_tracer(name: str) -> trace.Tracer:
+    """Get OpenTelemetry tracer for a component.
+
+    Args:
+        name: Tracer name (typically module name)
+
+    Returns:
+        Tracer instance
+    """
+    return trace.get_tracer(name)
+
+
 def get_logger(name: str, **context: Any) -> Any:
     """Get a structured logger with optional context.
 
@@ -174,28 +310,108 @@ def get_logger(name: str, **context: Any) -> Any:
     return logger
 
 
+def log_operation(
+    logger: Any,
+    operation: str,
+    status: str = "success",
+    global_seq: Optional[int] = None,
+    view_seq: Optional[int] = None,
+    agent_id: Optional[str] = None,
+    req_id: Optional[str] = None,
+    latency_ms: Optional[float] = None,
+    **extra_context: Any,
+) -> None:
+    """Log an operation with standardized fields for observability.
+
+    Args:
+        logger: Structured logger instance
+        operation: Operation name
+        status: Operation status (success, error, warning)
+        global_seq: Global sequence number
+        view_seq: View sequence number
+        agent_id: Agent identifier
+        req_id: Request identifier
+        latency_ms: Operation latency in milliseconds
+        **extra_context: Additional context fields
+    """
+    log_data = {
+        "operation": operation,
+        "status": status,
+        **extra_context,
+    }
+
+    # Add optional fields if provided
+    if global_seq is not None:
+        log_data["global_seq"] = global_seq
+    if view_seq is not None:
+        log_data["view_seq"] = view_seq
+    if agent_id is not None:
+        log_data["agent_id"] = agent_id
+    if req_id is not None:
+        log_data["req_id"] = req_id
+    if latency_ms is not None:
+        log_data["latency_ms"] = latency_ms
+
+    # Add timing context
+    log_data.update(get_timing_context())
+
+    # Log at appropriate level based on status
+    if status == "error":
+        logger.error("Operation completed", **log_data)
+    elif status == "warning":
+        logger.warning("Operation completed", **log_data)
+    else:
+        logger.info("Operation completed", **log_data)
+
+
 class PerformanceTimer:
     """Context manager for measuring operation performance.
 
-    Automatically records metrics and logs timing information.
+    Automatically records metrics, logs timing information, and creates tracing spans.
     """
 
     def __init__(
         self,
         operation: str,
         agent_id: str | None = None,
+        req_id: str | None = None,
+        global_seq: int | None = None,
+        view_seq: int | None = None,
         logger: structlog.BoundLogger | None = None,
         record_metrics: bool = True,
+        create_span: bool = True,
+        tracer_name: str = "gunn.performance",
     ):
         self.operation = operation
         self.agent_id = agent_id or "unknown"
+        self.req_id = req_id
+        self.global_seq = global_seq
+        self.view_seq = view_seq
         self.logger = logger or get_logger("gunn.performance")
         self.record_metrics = record_metrics
+        self.create_span = create_span
+        self.tracer = get_tracer(tracer_name) if create_span else None
+        self.span: Optional[trace.Span] = None
         self.start_time: float | None = None
         self.end_time: float | None = None
 
     def __enter__(self) -> "PerformanceTimer":
         self.start_time = time.perf_counter()
+
+        # Create tracing span
+        if self.create_span and self.tracer:
+            self.span = self.tracer.start_span(self.operation)
+
+            # Add attributes to span
+            if self.agent_id:
+                self.span.set_attribute("agent_id", self.agent_id)
+            if self.req_id:
+                self.span.set_attribute("req_id", self.req_id)
+            if self.global_seq is not None:
+                self.span.set_attribute("global_seq", self.global_seq)
+            if self.view_seq is not None:
+                self.span.set_attribute("view_seq", self.view_seq)
+
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -214,13 +430,29 @@ class PerformanceTimer:
                 operation=self.operation, agent_id=self.agent_id
             ).observe(duration)
 
-        # Log timing
-        self.logger.info(
-            "Operation completed",
-            operation=self.operation,
-            agent_id=self.agent_id,
-            duration_ms=duration * 1000,
+        # Update span
+        if self.span:
+            self.span.set_attribute("duration_seconds", duration)
+            self.span.set_attribute("status", status)
+
+            if exc_type:
+                self.span.set_status(trace.Status(trace.StatusCode.ERROR, str(exc_val)))
+                self.span.record_exception(exc_val)
+            else:
+                self.span.set_status(trace.Status(trace.StatusCode.OK))
+
+            self.span.end()
+
+        # Enhanced logging with all context
+        log_operation(
+            self.logger,
+            self.operation,
             status=status,
+            global_seq=self.global_seq,
+            view_seq=self.view_seq,
+            agent_id=self.agent_id,
+            req_id=self.req_id,
+            latency_ms=duration * 1000,
         )
 
     @property
@@ -235,22 +467,57 @@ class PerformanceTimer:
 async def async_performance_timer(
     operation: str,
     agent_id: str | None = None,
+    req_id: str | None = None,
+    global_seq: int | None = None,
+    view_seq: int | None = None,
     logger: structlog.BoundLogger | None = None,
     record_metrics: bool = True,
+    create_span: bool = True,
+    tracer_name: str = "gunn.performance",
 ) -> AsyncGenerator[PerformanceTimer, None]:
     """Async context manager for measuring operation performance.
 
     Args:
         operation: Operation name for metrics/logging
         agent_id: Agent identifier (optional)
+        req_id: Request identifier (optional)
+        global_seq: Global sequence number (optional)
+        view_seq: View sequence number (optional)
         logger: Logger instance (optional)
         record_metrics: Whether to record Prometheus metrics
+        create_span: Whether to create tracing span
+        tracer_name: Tracer name for spans
 
     Yields:
         PerformanceTimer instance
     """
-    timer = PerformanceTimer(operation, agent_id, logger, record_metrics)
+    timer = PerformanceTimer(
+        operation=operation,
+        agent_id=agent_id,
+        req_id=req_id,
+        global_seq=global_seq,
+        view_seq=view_seq,
+        logger=logger,
+        record_metrics=record_metrics,
+        create_span=create_span,
+        tracer_name=tracer_name,
+    )
+
     timer.start_time = time.perf_counter()
+
+    # Create tracing span
+    if create_span and timer.tracer:
+        timer.span = timer.tracer.start_span(operation)
+
+        # Add attributes to span
+        if agent_id:
+            timer.span.set_attribute("agent_id", agent_id)
+        if req_id:
+            timer.span.set_attribute("req_id", req_id)
+        if global_seq is not None:
+            timer.span.set_attribute("global_seq", global_seq)
+        if view_seq is not None:
+            timer.span.set_attribute("view_seq", view_seq)
 
     try:
         yield timer
@@ -268,15 +535,26 @@ async def async_performance_timer(
                 operation=operation, agent_id=agent_id or "unknown"
             ).observe(duration)
 
-        # Log error
-        if logger:
-            logger.error(
-                "Operation failed",
-                operation=operation,
-                agent_id=agent_id,
-                duration_ms=duration * 1000,
-                error=str(e),
-            )
+        # Update span
+        if timer.span:
+            timer.span.set_attribute("duration_seconds", duration)
+            timer.span.set_attribute("status", "error")
+            timer.span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+            timer.span.record_exception(e)
+            timer.span.end()
+
+        # Enhanced error logging
+        log_operation(
+            logger or get_logger("gunn.performance"),
+            operation,
+            status="error",
+            global_seq=global_seq,
+            view_seq=view_seq,
+            agent_id=agent_id,
+            req_id=req_id,
+            latency_ms=duration * 1000,
+            error=str(e),
+        )
 
         raise
     else:
@@ -293,15 +571,24 @@ async def async_performance_timer(
                 operation=operation, agent_id=agent_id or "unknown"
             ).observe(duration)
 
-        # Log success
-        if logger:
-            logger.info(
-                "Operation completed",
-                operation=operation,
-                agent_id=agent_id,
-                duration_ms=duration * 1000,
-                status="success",
-            )
+        # Update span
+        if timer.span:
+            timer.span.set_attribute("duration_seconds", duration)
+            timer.span.set_attribute("status", "success")
+            timer.span.set_status(trace.Status(trace.StatusCode.OK))
+            timer.span.end()
+
+        # Enhanced success logging
+        log_operation(
+            logger or get_logger("gunn.performance"),
+            operation,
+            status="success",
+            global_seq=global_seq,
+            view_seq=view_seq,
+            agent_id=agent_id,
+            req_id=req_id,
+            latency_ms=duration * 1000,
+        )
 
 
 def record_queue_depth(agent_id: str, depth: int) -> None:
@@ -380,6 +667,69 @@ def record_error_recovery_action(
     ).inc()
 
 
+def record_intent_throughput(
+    agent_id: str, intent_kind: str, status: str = "success"
+) -> None:
+    """Record intent processing throughput.
+
+    Args:
+        agent_id: Agent identifier
+        intent_kind: Type of intent (Speak, Move, etc.)
+        status: Processing status (success, error, conflict)
+    """
+    INTENT_THROUGHPUT.labels(
+        agent_id=agent_id, intent_kind=intent_kind, status=status
+    ).inc()
+
+
+def record_conflict(agent_id: str, conflict_type: str) -> None:
+    """Record an intent conflict.
+
+    Args:
+        agent_id: Agent identifier
+        conflict_type: Type of conflict (staleness, validation, quota)
+    """
+    CONFLICT_RATE.labels(agent_id=agent_id, conflict_type=conflict_type).inc()
+
+
+def record_observation_delivery_latency(agent_id: str, latency_seconds: float) -> None:
+    """Record observation delivery latency.
+
+    Args:
+        agent_id: Agent identifier
+        latency_seconds: Time from effect creation to observation delivery
+    """
+    OBSERVATION_DELIVERY_LATENCY.labels(agent_id=agent_id).observe(latency_seconds)
+
+
+def update_global_seq(seq: int) -> None:
+    """Update the current global sequence number metric.
+
+    Args:
+        seq: Current global sequence number
+    """
+    GLOBAL_SEQ_GAUGE.set(seq)
+
+
+def update_view_seq(agent_id: str, seq: int) -> None:
+    """Update the current view sequence number for an agent.
+
+    Args:
+        agent_id: Agent identifier
+        seq: Current view sequence number
+    """
+    VIEW_SEQ_GAUGE.labels(agent_id=agent_id).set(seq)
+
+
+def update_active_agents_count(count: int) -> None:
+    """Update the number of active agents.
+
+    Args:
+        count: Number of currently active agents
+    """
+    ACTIVE_AGENTS_GAUGE.set(count)
+
+
 def start_metrics_server(port: int = 8000) -> None:
     """Start Prometheus metrics HTTP server.
 
@@ -430,3 +780,165 @@ def get_timing_context() -> dict[str, float]:
         "monotonic_time": MonotonicClock.now(),
         "wall_time": MonotonicClock.wall_time(),
     }
+
+
+class SystemMonitor:
+    """Monitor system resources and record metrics."""
+
+    def __init__(self):
+        self._process = psutil.Process()
+        self._last_cpu_time = time.time()
+        self._last_cpu_percent = 0.0
+
+    def record_memory_usage(self, component: str = "system") -> float:
+        """Record current memory usage and return bytes used.
+
+        Args:
+            component: Component name for metrics labeling
+
+        Returns:
+            Memory usage in bytes
+        """
+        try:
+            memory_info = self._process.memory_info()
+            memory_bytes = memory_info.rss  # Resident Set Size
+
+            MEMORY_USAGE_BYTES.labels(component=component).set(memory_bytes)
+
+            return memory_bytes
+        except Exception as e:
+            get_logger("gunn.telemetry.monitor").warning(
+                "Failed to record memory usage", component=component, error=str(e)
+            )
+            return 0.0
+
+    def record_cpu_usage(self, component: str = "system") -> float:
+        """Record current CPU usage and return percentage.
+
+        Args:
+            component: Component name for metrics labeling
+
+        Returns:
+            CPU usage percentage
+        """
+        try:
+            # Use interval to get accurate CPU percentage
+            cpu_percent = self._process.cpu_percent(interval=None)
+
+            # If this is the first call, cpu_percent returns 0.0
+            # Use the cached value from previous call
+            if cpu_percent == 0.0 and self._last_cpu_percent > 0.0:
+                cpu_percent = self._last_cpu_percent
+            else:
+                self._last_cpu_percent = cpu_percent
+
+            CPU_USAGE_PERCENT.labels(component=component).set(cpu_percent)
+
+            return cpu_percent
+        except Exception as e:
+            get_logger("gunn.telemetry.monitor").warning(
+                "Failed to record CPU usage", component=component, error=str(e)
+            )
+            return 0.0
+
+    def get_system_stats(self) -> dict[str, Any]:
+        """Get comprehensive system statistics.
+
+        Returns:
+            Dictionary with system resource information
+        """
+        try:
+            memory_info = self._process.memory_info()
+            cpu_times = self._process.cpu_times()
+
+            # Get system-wide stats
+            system_memory = psutil.virtual_memory()
+            system_cpu = psutil.cpu_percent(interval=None)
+
+            return {
+                "process": {
+                    "memory_rss_bytes": memory_info.rss,
+                    "memory_vms_bytes": memory_info.vms,
+                    "cpu_user_seconds": cpu_times.user,
+                    "cpu_system_seconds": cpu_times.system,
+                    "cpu_percent": self._process.cpu_percent(interval=None),
+                    "num_threads": self._process.num_threads(),
+                    "num_fds": self._process.num_fds()
+                    if hasattr(self._process, "num_fds")
+                    else 0,
+                },
+                "system": {
+                    "memory_total_bytes": system_memory.total,
+                    "memory_available_bytes": system_memory.available,
+                    "memory_used_bytes": system_memory.used,
+                    "memory_percent": system_memory.percent,
+                    "cpu_percent": system_cpu,
+                    "cpu_count": psutil.cpu_count(),
+                },
+            }
+        except Exception as e:
+            get_logger("gunn.telemetry.monitor").warning(
+                "Failed to get system stats", error=str(e)
+            )
+            return {}
+
+
+class BandwidthMonitor:
+    """Monitor bandwidth usage for patch operations and other data transfers."""
+
+    def __init__(self):
+        self._logger = get_logger("gunn.telemetry.bandwidth")
+
+    def record_patch_bandwidth(
+        self,
+        agent_id: str,
+        patch_size_bytes: int,
+        operation_count: int,
+        is_fallback: bool = False,
+    ) -> None:
+        """Record bandwidth usage for patch operations.
+
+        Args:
+            agent_id: Agent identifier
+            patch_size_bytes: Size of patch data in bytes
+            operation_count: Number of patch operations
+            is_fallback: Whether this was a fallback to full snapshot
+        """
+        # Record bandwidth
+        BANDWIDTH_BYTES.labels(direction="outbound", component="observation_delta").inc(
+            patch_size_bytes
+        )
+
+        # Record patch operation count
+        PATCH_OPERATIONS_COUNT.labels(agent_id=agent_id).observe(operation_count)
+
+        # Record fallback events
+        if is_fallback:
+            PATCH_FALLBACK_EVENTS.labels(agent_id=agent_id).inc()
+
+        self._logger.debug(
+            "Recorded patch bandwidth",
+            agent_id=agent_id,
+            patch_size_bytes=patch_size_bytes,
+            operation_count=operation_count,
+            is_fallback=is_fallback,
+        )
+
+    def record_data_transfer(
+        self, direction: str, component: str, bytes_transferred: int
+    ) -> None:
+        """Record general data transfer.
+
+        Args:
+            direction: Transfer direction (inbound/outbound)
+            component: Component name
+            bytes_transferred: Number of bytes transferred
+        """
+        BANDWIDTH_BYTES.labels(direction=direction, component=component).inc(
+            bytes_transferred
+        )
+
+
+# Global instances for convenience
+system_monitor = SystemMonitor()
+bandwidth_monitor = BandwidthMonitor()

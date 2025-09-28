@@ -9,12 +9,13 @@ import asyncio
 import math
 import time
 from collections.abc import AsyncGenerator
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from gunn.schemas.types import CancelToken
 from gunn.utils.telemetry import get_logger
 
 
+@runtime_checkable
 class LLMAdapter(Protocol):
     """Protocol for LLM adapters with streaming support."""
 

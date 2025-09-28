@@ -57,7 +57,7 @@ class TestTwoPhaseCommit:
         """Create sample intent for testing."""
         return Intent(
             kind="Speak",
-            payload={"text": "Hello world"},
+            payload={"message": "Hello world"},  # Changed from "text" to "message"
             context_seq=0,
             req_id="test_req_1",
             agent_id="test_agent",
@@ -65,13 +65,34 @@ class TestTwoPhaseCommit:
             schema_version="1.0.0",
         )
 
+    async def _setup_agent_with_permissions(self, orchestrator, agent_id, mock_policy):
+        """Helper method to set up agent with proper permissions and world state."""
+        # Register agent
+        await orchestrator.register_agent(agent_id, mock_policy)
+
+        # Set up permissions for the agent
+        orchestrator.effect_validator.set_agent_permissions(
+            agent_id,
+            {"submit_intent", "intent:speak", "intent:move", "intent:interact"},
+        )
+
+        # Add agent to world state
+        orchestrator.world_state.entities[agent_id] = {"name": f"Test Agent {agent_id}"}
+
     @pytest.mark.asyncio
     async def test_basic_intent_submission(
         self, orchestrator, mock_policy, sample_intent
     ):
         """Test basic intent submission and processing."""
-        # Register agent
-        _ = await orchestrator.register_agent("test_agent", mock_policy)
+        # Set up agent with proper permissions
+        await self._setup_agent_with_permissions(
+            orchestrator, "test_agent", mock_policy
+        )
+
+        # Update sample intent to use correct payload format
+        sample_intent["payload"] = {
+            "message": "Hello world"
+        }  # Changed from "text" to "message"
 
         # Submit intent
         req_id = await orchestrator.submit_intent(sample_intent)
@@ -89,8 +110,10 @@ class TestTwoPhaseCommit:
     @pytest.mark.asyncio
     async def test_idempotency_checking(self, orchestrator, mock_policy, sample_intent):
         """Test that duplicate intents are handled idempotently."""
-        # Register agent
-        await orchestrator.register_agent("test_agent", mock_policy)
+        # Set up agent with proper permissions
+        await self._setup_agent_with_permissions(
+            orchestrator, "test_agent", mock_policy
+        )
 
         # Submit intent first time
         req_id_1 = await orchestrator.submit_intent(sample_intent)
@@ -110,28 +133,43 @@ class TestTwoPhaseCommit:
     @pytest.mark.asyncio
     async def test_staleness_detection(self, orchestrator, mock_policy):
         """Test staleness detection based on context_seq."""
-        # Register agent
-        _ = await orchestrator.register_agent("test_agent", mock_policy)
+        # Set up agent with proper permissions
+        await self._setup_agent_with_permissions(
+            orchestrator, "test_agent", mock_policy
+        )
+
+        # Add agent to spatial index for Move intents
+        orchestrator.world_state.spatial_index["test_agent"] = (0.0, 0.0, 0.0)
+
+        # Disable cooldowns for this test to allow rapid intent processing
+        orchestrator.effect_validator.set_intent_kind_cooldown("Move", 0.0)
+        orchestrator.effect_validator.set_intent_kind_cooldown("Speak", 0.0)
 
         # Advance global sequence by submitting some intents
         for i in range(5):
+            # Use current global_seq as context_seq to avoid staleness during setup
+            current_seq = orchestrator._global_seq
             intent = Intent(
                 kind="Move",
-                payload={"x": i, "y": i},
-                context_seq=0,
+                payload={
+                    "to": [float(i), float(i), 0.0]
+                },  # Changed format for move validation
+                context_seq=current_seq,  # Use current seq to avoid staleness
                 req_id=f"setup_req_{i}",
                 agent_id="test_agent",
                 priority=0,
                 schema_version="1.0.0",
             )
             await orchestrator.submit_intent(intent)
+            # Small delay to allow processing
+            await asyncio.sleep(0.02)
 
-        await asyncio.sleep(0.1)  # Let them process
+        await asyncio.sleep(0.2)  # Let them process
 
         # Now submit intent with stale context
         stale_intent = Intent(
             kind="Speak",
-            payload={"text": "Stale message"},
+            payload={"message": "Stale message"},  # Changed from "text" to "message"
             context_seq=0,  # Very old context
             req_id="stale_req",
             agent_id="test_agent",

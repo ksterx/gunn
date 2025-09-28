@@ -4,6 +4,7 @@ Tests cover agent registration, basic orchestration functionality,
 deterministic ordering, and sim_time authority handling.
 """
 
+import asyncio
 from typing import cast
 
 import pytest
@@ -61,14 +62,19 @@ class TestOrchestratorConfig:
 class TestDefaultEffectValidator:
     """Test DefaultEffectValidator implementation."""
 
-    def test_validate_intent_always_true(self) -> None:
-        """Test that default validator always returns True."""
+    def test_validate_intent_with_proper_setup(self) -> None:
+        """Test that default validator returns True with proper setup."""
         validator = DefaultEffectValidator()
-        world_state = WorldState()
+
+        # Set up permissions for the agent
+        validator.set_agent_permissions("agent_1", {"submit_intent", "intent:speak"})
+
+        # Set up world state with the agent
+        world_state = WorldState(entities={"agent_1": {"name": "Test Agent"}})
 
         intent: Intent = {
             "kind": "Speak",
-            "payload": {"text": "Hello"},
+            "payload": {"message": "Hello"},  # Changed from "text" to "message"
             "context_seq": 1,
             "req_id": "test_req_1",
             "agent_id": "agent_1",
@@ -78,6 +84,26 @@ class TestDefaultEffectValidator:
 
         result = validator.validate_intent(intent, world_state)
         assert result is True
+
+    def test_validate_intent_fails_without_permissions(self) -> None:
+        """Test that default validator fails without proper permissions."""
+        from gunn.utils.errors import ValidationError
+
+        validator = DefaultEffectValidator()
+        world_state = WorldState()
+
+        intent: Intent = {
+            "kind": "Speak",
+            "payload": {"message": "Hello"},
+            "context_seq": 1,
+            "req_id": "test_req_1",
+            "agent_id": "agent_1",
+            "priority": 0,
+            "schema_version": "1.0.0",
+        }
+
+        with pytest.raises(ValidationError):
+            validator.validate_intent(intent, world_state)
 
 
 class TestAgentHandle:
@@ -161,7 +187,12 @@ class TestOrchestrator:
     @pytest.fixture
     def config(self) -> OrchestratorConfig:
         """Create test configuration."""
-        return OrchestratorConfig(max_agents=5, staleness_threshold=2)
+        return OrchestratorConfig(
+            max_agents=5,
+            staleness_threshold=2,
+            dedup_warmup_minutes=0,  # Disable warmup for tests
+            use_in_memory_dedup=True,  # Use in-memory dedup for tests
+        )
 
     @pytest.fixture
     async def orchestrator(self, config: OrchestratorConfig) -> Orchestrator:
@@ -393,9 +424,17 @@ class TestOrchestrator:
         # Register agent first
         await orchestrator.register_agent("test_agent", observation_policy)
 
+        # Set up permissions for the agent
+        orchestrator.effect_validator.set_agent_permissions(
+            "test_agent", {"submit_intent", "intent:speak"}
+        )
+
+        # Add agent to world state
+        orchestrator.world_state.entities["test_agent"] = {"name": "Test Agent"}
+
         intent: Intent = {
             "kind": "Speak",
-            "payload": {"text": "Hello"},
+            "payload": {"message": "Hello"},  # Changed from "text" to "message"
             "context_seq": 1,
             "req_id": "test_req_1",
             "agent_id": "test_agent",
@@ -406,13 +445,19 @@ class TestOrchestrator:
         req_id = await orchestrator.submit_intent(intent)
         assert req_id == "test_req_1"
 
+        # Wait a bit for async processing to complete
+        await asyncio.sleep(0.1)
+
         # Verify effect was created
         entries = orchestrator.event_log.get_all_entries()
         assert len(entries) == 1
 
         effect = entries[0].effect
         assert effect["kind"] == "Speak"
-        assert effect["payload"] == {"text": "Hello"}
+        assert (
+            effect["payload"]["message"] == "Hello"
+        )  # Changed from "text" to "message"
+        assert effect["payload"]["priority"] == 0  # Default priority should be added
         assert effect["source_id"] == "test_agent"
 
     @pytest.mark.asyncio
@@ -422,9 +467,17 @@ class TestOrchestrator:
         """Test intent idempotency - duplicate req_id should not create duplicate effects."""
         await orchestrator.register_agent("test_agent", observation_policy)
 
-        intent: Intent = {
+        # Set up permissions for the agent
+        orchestrator.effect_validator.set_agent_permissions(
+            "test_agent", {"submit_intent", "intent:speak"}
+        )
+
+        # Add agent to world state
+        orchestrator.world_state.entities["test_agent"] = {"name": "Test Agent"}
+
+        intent1: Intent = {
             "kind": "Speak",
-            "payload": {"text": "Hello"},
+            "payload": {"message": "Hello"},  # Changed from "text" to "message"
             "context_seq": 1,
             "req_id": "test_req_1",
             "agent_id": "test_agent",
@@ -432,11 +485,24 @@ class TestOrchestrator:
             "schema_version": "1.0.0",
         }
 
+        intent2: Intent = {
+            "kind": "Speak",
+            "payload": {"message": "Hello"},  # Changed from "text" to "message"
+            "context_seq": 1,
+            "req_id": "test_req_1",  # Same req_id for idempotency test
+            "agent_id": "test_agent",
+            "priority": 0,
+            "schema_version": "1.0.0",
+        }
+
         # Submit same intent twice
-        req_id1 = await orchestrator.submit_intent(intent)
-        req_id2 = await orchestrator.submit_intent(intent)
+        req_id1 = await orchestrator.submit_intent(intent1)
+        req_id2 = await orchestrator.submit_intent(intent2)
 
         assert req_id1 == req_id2 == "test_req_1"
+
+        # Wait a bit for async processing to complete
+        await asyncio.sleep(0.5)
 
         # Should only have one effect in log
         entries = orchestrator.event_log.get_all_entries()
@@ -473,8 +539,21 @@ class TestOrchestrator:
             "schema_version": "1.0.0",
         }
 
-        with pytest.raises(ValueError, match="Intent validation failed for test_req_1"):
-            await orchestrator_with_failing_validator.submit_intent(intent)
+        # Submit intent (should be enqueued but fail during processing)
+        req_id = await orchestrator_with_failing_validator.submit_intent(intent)
+        assert req_id == "test_req_1"
+
+        # Wait for processing
+        await asyncio.sleep(0.1)
+
+        # Intent should be enqueued but processing should fail
+        # No effect should be created in the event log
+        entries = orchestrator_with_failing_validator.event_log.get_all_entries()
+        assert len(entries) == 0
+
+        # Check that intent was enqueued
+        stats = orchestrator_with_failing_validator.get_processing_stats()
+        assert stats["scheduler"]["total_enqueued"] == 1
 
     @pytest.mark.asyncio
     async def test_submit_intent_missing_fields(

@@ -7,8 +7,14 @@ import time
 import pytest
 from pydantic import ValidationError
 
-from .messages import EventLogEntry, View, WorldState
-from .types import CancelToken, Effect, EffectDraft, Intent, ObservationDelta
+from gunn.schemas.messages import EventLogEntry, View, WorldState
+from gunn.schemas.types import (
+    CancelToken,
+    Effect,
+    EffectDraft,
+    Intent,
+    ObservationDelta,
+)
 
 
 class TestWorldState:
@@ -498,7 +504,7 @@ class TestCancelToken:
         with pytest.raises(ValueError, match="Cancellation reason cannot be empty"):
             token.cancel("   ")
 
-    @pytest.mark.asyncio  # type: ignore[misc]
+    @pytest.mark.asyncio
     async def test_wait_cancelled(self) -> None:
         """Test async wait for cancellation."""
         token = CancelToken("req_123", "agent1")
@@ -518,7 +524,7 @@ class TestCancelToken:
         assert token.cancelled
         assert token.reason == "test_reason"
 
-    @pytest.mark.asyncio  # type: ignore[misc]
+    @pytest.mark.asyncio
     async def test_wait_cancelled_already_cancelled(self) -> None:
         """Test wait_cancelled when token is already cancelled."""
         token = CancelToken("req_123", "agent1")

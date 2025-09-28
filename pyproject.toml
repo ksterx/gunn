@@ -21,6 +21,9 @@ dependencies = [
     "rich>=14.1.0",
     "typer>=0.19.2",
     "httpx>=0.28.1",
+    "uvicorn>=0.24.0",
+    "click>=8.1.0",
+    "psutil>=7.1.0",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +35,15 @@ dev = [
     "pre-commit>=3.5.0",
     "types-pyyaml>=6.0.12.20250915",
     "pyyaml>=6.0",
+    "psutil>=5.9.0",
+]
+
+docs = [
+    "sphinx>=7.3",
+    "myst-parser>=2.0",
+    "furo>=2024.1.29",
+    "sphinx-autodoc-typehints>=2.1.0",
+    "sphinx-copybutton>=0.5.2",
 ]
 
 [project.scripts]
@@ -97,6 +109,7 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = [
     "tests.*",
+    "tests/*",
     "gunn.utils.test_hashing_integration",
     "gunn.utils.test_hashing",
     "gunn.utils.hashing_demo",
@@ -154,4 +167,13 @@ dev = [
     "pytest-asyncio>=1.2.0",
     "pyyaml>=6.0.3",
     "types-pyyaml>=6.0.12.20250915",
+]
+
+docs = [
+    "sphinx>=7.3",
+    "myst-parser[linkify]>=4.0.0",
+    "furo>=2024.1.29",
+    "sphinx-autodoc-typehints>=2.1.0",
+    "sphinx-copybutton>=0.5.2",
+    "linkify-it-py>=2.0.3",
 ]
