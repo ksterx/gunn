@@ -18,6 +18,33 @@ from gunn.schemas.types import Intent
 class TestIntegrationTwoPhaseCommit:
     """Integration test for complete two-phase commit system."""
 
+    def setup_agent_permissions(
+        self, orchestrator: Orchestrator, agent_ids: list[str]
+    ) -> None:
+        """Setup permissions and world state for test agents."""
+        validator = orchestrator.effect_validator
+        if hasattr(validator, "set_agent_permissions"):
+            # Grant all necessary permissions for testing
+            permissions = {
+                "submit_intent",
+                "intent:speak",
+                "intent:move",
+                "intent:interact",
+                "intent:custom",
+            }
+            for agent_id in agent_ids:
+                validator.set_agent_permissions(agent_id, permissions)
+
+        # Add agents to world state so they are not "not_in_world"
+        for agent_id in agent_ids:
+            orchestrator.world_state.entities[agent_id] = {
+                "id": agent_id,
+                "type": "agent",
+                "position": {"x": 0, "y": 0},  # Add default position for Move intents
+            }
+            # Also add to spatial_index for Move intent validation
+            orchestrator.world_state.spatial_index[agent_id] = (0.0, 0.0, 0.0)
+
     @pytest.fixture
     async def system(self):
         """Set up complete system for integration testing."""
@@ -28,6 +55,7 @@ class TestIntegrationTwoPhaseCommit:
             quota_intents_per_minute=20,
             use_in_memory_dedup=True,
             dedup_warmup_minutes=0,
+            processing_idle_shutdown_ms=0.0,  # Disable idle shutdown for tests
         )
 
         orchestrator = Orchestrator(config, world_id="integration_test")
@@ -57,10 +85,13 @@ class TestIntegrationTwoPhaseCommit:
         _ = await orchestrator.register_agent("agent_a", mock_policy)
         _ = await orchestrator.register_agent("agent_b", mock_policy)
 
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, ["agent_a", "agent_b"])
+
         # Submit intents from both agents
         intent_a = Intent(
             kind="Speak",
-            payload={"text": "Hello from Agent A"},
+            payload={"message": "Hello from Agent A"},
             context_seq=0,
             req_id="req_a_1",
             agent_id="agent_a",
@@ -70,7 +101,7 @@ class TestIntegrationTwoPhaseCommit:
 
         intent_b = Intent(
             kind="Move",
-            payload={"x": 10, "y": 20},
+            payload={"to": [10.0, 20.0, 0.0]},
             context_seq=0,
             req_id="req_b_1",
             agent_id="agent_b",
@@ -337,12 +368,12 @@ class TestIntegrationTwoPhaseCommit:
         avg_submission_time = sum(submission_times) / len(submission_times)
         max_submission_time = max(submission_times)
 
-        assert (
-            avg_submission_time < 10.0
-        ), f"Average submission time {avg_submission_time:.2f}ms too high"
-        assert (
-            max_submission_time < 20.0
-        ), f"Max submission time {max_submission_time:.2f}ms too high"
+        assert avg_submission_time < 10.0, (
+            f"Average submission time {avg_submission_time:.2f}ms too high"
+        )
+        assert max_submission_time < 20.0, (
+            f"Max submission time {max_submission_time:.2f}ms too high"
+        )
 
         # Wait for processing and verify
         await asyncio.sleep(0.2)

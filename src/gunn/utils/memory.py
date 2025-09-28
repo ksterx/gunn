@@ -8,7 +8,7 @@ import asyncio
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from gunn.schemas.messages import WorldState
 from gunn.utils.telemetry import get_logger, record_queue_depth
@@ -243,7 +243,7 @@ class SnapshotManager:
 
         return snapshot
 
-    def find_nearest_snapshot(self, target_seq: int) -> Optional[WorldStateSnapshot]:
+    def find_nearest_snapshot(self, target_seq: int) -> WorldStateSnapshot | None:
         """Find the snapshot closest to but not exceeding target sequence.
 
         Args:
@@ -370,7 +370,7 @@ class MemoryManager:
 
     async def check_and_create_snapshot(
         self, current_seq: int, world_state: WorldState, sim_time: float = 0.0
-    ) -> Optional[WorldStateSnapshot]:
+    ) -> WorldStateSnapshot | None:
         """Check if a snapshot should be created and create it if needed.
 
         Args:

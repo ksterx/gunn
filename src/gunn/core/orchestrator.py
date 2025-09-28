@@ -34,6 +34,7 @@ from gunn.utils.telemetry import (
     record_conflict,
     record_intent_throughput,
     record_observation_delivery_latency,
+    record_queue_depth,
     record_queue_high_watermark,
     system_monitor,
     update_active_agents_count,
@@ -90,6 +91,13 @@ class DefaultEffectValidator:
         """
         self.max_intents_per_minute = max_intents_per_minute
         self.max_tokens_per_minute = max_tokens_per_minute
+
+        # Validation caching for performance optimization
+        self._permission_cache: dict[str, set[str]] = {}
+        self._validation_cache: dict[
+            str, tuple[bool, float]
+        ] = {}  # (is_valid, timestamp)
+        self._cache_ttl = 1.0  # Cache TTL in seconds
         self.default_cooldown_seconds = default_cooldown_seconds
         self.max_payload_size_bytes = max_payload_size_bytes
         self.allowed_intent_kinds = allowed_intent_kinds or {
@@ -119,6 +127,14 @@ class DefaultEffectValidator:
             permissions: Set of permission strings
         """
         self._agent_permissions[agent_id] = permissions.copy()
+        # Invalidate cache for this agent
+        self._permission_cache.pop(agent_id, None)
+        # Invalidate validation cache entries for this agent
+        keys_to_remove = [
+            k for k in self._validation_cache.keys() if k.startswith(f"{agent_id}:")
+        ]
+        for key in keys_to_remove:
+            self._validation_cache.pop(key, None)
 
     def add_agent_permission(self, agent_id: str, permission: str) -> None:
         """Add a permission for an agent.
@@ -944,6 +960,7 @@ class Orchestrator:
         self._per_agent_queues: dict[str, TimedQueue] = {}  # Timed delivery queues
         self._sim_time_authority: str = "none"  # Which adapter controls sim_time
         self._processing_task: asyncio.Task[None] | None = None
+        self._system_monitoring_task: asyncio.Task[None] | None = None
         self._shutdown_event = asyncio.Event()
 
         # Cancellation and staleness detection enhancements
@@ -999,6 +1016,12 @@ class Orchestrator:
             # Initialize deduplication store and reset shutdown state
             await self._dedup_store.initialize()
             self._shutdown_event.clear()
+
+            # Start system monitoring task
+            if hasattr(self, "_monitor_system_func"):
+                self._system_monitoring_task = asyncio.create_task(
+                    self._monitor_system_func()
+                )
 
             self._initialized = True
             self._logger.info("Orchestrator dependencies initialized")
@@ -1739,15 +1762,32 @@ class Orchestrator:
                                 remaining_tokens=len(self._cancel_tokens),
                             )
 
-                    # Dequeue next intent for processing
-                    intent = self._scheduler.dequeue()
-                    if intent is None:
-                        # No intents to process, wait a bit
-                        await asyncio.sleep(0.01)  # 10ms
+                    # Batch dequeue multiple intents for parallel processing
+                    intents_to_process = []
+                    max_batch_size = 5  # Process up to 5 intents in parallel
+
+                    # Collect available intents up to batch size
+                    for _ in range(max_batch_size):
+                        intent = self._scheduler.dequeue()
+                        if intent is None:
+                            break
+                        intents_to_process.append(intent)
+
+                    if not intents_to_process:
+                        # No intents to process, wait a bit (reduced from 10ms to 1ms)
+                        await asyncio.sleep(
+                            0.001
+                        )  # 1ms - significantly reduces idle time
                         continue
 
-                    # Process the intent
-                    await self._process_intent(intent)
+                    # Process intents in parallel
+                    tasks = [
+                        asyncio.create_task(self._process_intent(intent))
+                        for intent in intents_to_process
+                    ]
+
+                    # Wait for all tasks to complete
+                    await asyncio.gather(*tasks, return_exceptions=True)
 
                 except Exception as e:
                     self._logger.error(
@@ -2021,7 +2061,10 @@ class Orchestrator:
         # First, check for stale tokens and cancel them automatically
         _ = await self.check_and_cancel_stale_tokens(effect)
 
-        for agent_id, agent_handle in self.agent_handles.items():
+        # Parallel observation generation for better performance
+        async def process_agent_observation(
+            agent_id: str, agent_handle
+        ) -> tuple[str, bool]:
             try:
                 # Check if agent should observe this effect
                 observation_policy = self.observation_policies[agent_id]
@@ -2030,7 +2073,7 @@ class Orchestrator:
                 )
 
                 if not should_observe:
-                    continue
+                    return agent_id, False
 
                 # Generate new view for the agent
                 new_view = observation_policy.filter_world_state(
@@ -2079,7 +2122,6 @@ class Orchestrator:
                 deliver_at = loop.time() + delivery_delay
 
                 await agent_queue.put_at(deliver_at, observation_delta)
-                agents_notified += 1
 
                 # Record observation delivery latency and bandwidth
                 record_observation_delivery_latency(agent_id, delivery_delay)
@@ -2102,6 +2144,8 @@ class Orchestrator:
                     view_seq=new_view.view_seq,
                 )
 
+                return agent_id, True
+
             except Exception as e:
                 self._logger.error(
                     "Failed to generate observation for agent",
@@ -2111,7 +2155,20 @@ class Orchestrator:
                     error=str(e),
                     error_type=type(e).__name__,
                 )
-                # Continue with other agents
+                return agent_id, False
+
+        # Execute all agent observation processing in parallel
+        tasks = [
+            asyncio.create_task(process_agent_observation(agent_id, agent_handle))
+            for agent_id, agent_handle in self.agent_handles.items()
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Count successful notifications
+        agents_notified = sum(
+            1 for result in results if isinstance(result, tuple) and result[1]
+        )
 
         distribution_time_ms = (time.perf_counter() - distribution_start) * 1000
 
@@ -2344,6 +2401,16 @@ class Orchestrator:
             finally:
                 self._processing_task = None
 
+        # Stop system monitoring task
+        if hasattr(self, "_system_monitoring_task") and self._system_monitoring_task:
+            self._system_monitoring_task.cancel()
+            try:
+                await self._system_monitoring_task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self._system_monitoring_task = None
+
         # Close deduplication store
         await self._dedup_store.close()
 
@@ -2368,7 +2435,7 @@ class Orchestrator:
     def _start_system_monitoring(self) -> None:
         """Start background system monitoring task."""
 
-        async def monitor_system():
+        async def monitor_system() -> None:
             while not self._shutdown_event.is_set():
                 try:
                     # Record system metrics
@@ -2387,5 +2454,5 @@ class Orchestrator:
                     self._logger.warning("System monitoring error", error=str(e))
                     await asyncio.sleep(60.0)  # Back off on error
 
-        # Start monitoring task
-        asyncio.create_task(monitor_system())
+        # Store monitor_system function for later use in initialize()
+        self._monitor_system_func = monitor_system

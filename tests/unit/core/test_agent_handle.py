@@ -202,10 +202,41 @@ class TestAgentHandleObservations:
 class TestAgentHandleIntentSubmission:
     """Test intent submission through AgentHandle."""
 
+    def setup_agent_permissions(
+        self, orchestrator: Orchestrator, agent_ids: list[str]
+    ) -> None:
+        """Setup permissions and world state for test agents."""
+        validator = orchestrator.effect_validator
+        if hasattr(validator, "set_agent_permissions"):
+            # Grant all necessary permissions for testing
+            permissions = {
+                "submit_intent",
+                "intent:speak",
+                "intent:move",
+                "intent:interact",
+                "intent:custom",
+            }
+            for agent_id in agent_ids:
+                validator.set_agent_permissions(agent_id, permissions)
+
+        # Add agents to world state so they are not "not_in_world"
+        for agent_id in agent_ids:
+            orchestrator.world_state.entities[agent_id] = {
+                "id": agent_id,
+                "type": "agent",
+                "position": {"x": 0, "y": 0},  # Add default position for Move intents
+            }
+            # Also add to spatial_index for Move intent validation
+            orchestrator.world_state.spatial_index[agent_id] = (0.0, 0.0, 0.0)
+
     @pytest.fixture
     def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
+        config = OrchestratorConfig(
+            max_agents=10,
+            use_in_memory_dedup=True,
+            processing_idle_shutdown_ms=0.0,  # Disable idle shutdown for tests
+        )
         return Orchestrator(config, world_id="test_world")
 
     @pytest.fixture
@@ -218,11 +249,15 @@ class TestAgentHandleIntentSubmission:
         self, orchestrator: Orchestrator, observation_policy: DefaultObservationPolicy
     ) -> None:
         """Test successful intent submission."""
+        await orchestrator.initialize()
         handle = await orchestrator.register_agent("test_agent", observation_policy)
+
+        # Setup permissions and world state for agent
+        self.setup_agent_permissions(orchestrator, ["test_agent"])
 
         intent: Intent = {
             "kind": "Speak",
-            "payload": {"text": "Hello world"},
+            "payload": {"message": "Hello world"},
             "context_seq": 1,
             "req_id": "test_req_1",
             "agent_id": "test_agent",
@@ -233,11 +268,14 @@ class TestAgentHandleIntentSubmission:
         req_id = await handle.submit_intent(intent)
         assert req_id == "test_req_1"
 
+        # Wait for intent processing
+        await asyncio.sleep(0.1)
+
         # Verify effect was created in event log
         entries = orchestrator.event_log.get_all_entries()
         assert len(entries) == 1
         assert entries[0].effect["kind"] == "Speak"
-        assert entries[0].effect["payload"]["text"] == "Hello world"
+        assert entries[0].effect["payload"]["message"] == "Hello world"
 
     @pytest.mark.asyncio
     async def test_submit_intent_delegates_to_orchestrator(
@@ -360,10 +398,41 @@ class TestAgentHandleCancellation:
 class TestAgentHandleIsolation:
     """Test agent isolation and non-blocking operations."""
 
+    def setup_agent_permissions(
+        self, orchestrator: Orchestrator, agent_ids: list[str]
+    ) -> None:
+        """Setup permissions and world state for test agents."""
+        validator = orchestrator.effect_validator
+        if hasattr(validator, "set_agent_permissions"):
+            # Grant all necessary permissions for testing
+            permissions = {
+                "submit_intent",
+                "intent:speak",
+                "intent:move",
+                "intent:interact",
+                "intent:custom",
+            }
+            for agent_id in agent_ids:
+                validator.set_agent_permissions(agent_id, permissions)
+
+        # Add agents to world state so they are not "not_in_world"
+        for agent_id in agent_ids:
+            orchestrator.world_state.entities[agent_id] = {
+                "id": agent_id,
+                "type": "agent",
+                "position": {"x": 0, "y": 0},  # Add default position for Move intents
+            }
+            # Also add to spatial_index for Move intent validation
+            orchestrator.world_state.spatial_index[agent_id] = (0.0, 0.0, 0.0)
+
     @pytest.fixture
     def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=10)
+        config = OrchestratorConfig(
+            max_agents=10,
+            use_in_memory_dedup=True,
+            processing_idle_shutdown_ms=0.0,  # Disable idle shutdown for tests
+        )
         return Orchestrator(config, world_id="test_world")
 
     @pytest.fixture
@@ -434,11 +503,19 @@ class TestAgentHandleIsolation:
         self, orchestrator: Orchestrator, observation_policy: DefaultObservationPolicy
     ) -> None:
         """Test concurrent intent submission from multiple agents."""
+        await orchestrator.initialize()
+
         # Register multiple agents
         handles = []
+        agent_ids = []
         for i in range(3):
-            handle = await orchestrator.register_agent(f"agent_{i}", observation_policy)
+            agent_id = f"agent_{i}"
+            handle = await orchestrator.register_agent(agent_id, observation_policy)
             handles.append(handle)
+            agent_ids.append(agent_id)
+
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, agent_ids)
 
         # Create intents for each agent
         intents = []
@@ -463,6 +540,9 @@ class TestAgentHandleIsolation:
 
         # Verify all succeeded
         assert req_ids == ["req_0", "req_1", "req_2"]
+
+        # Wait for intent processing
+        await asyncio.sleep(0.1)
 
         # Verify all effects were logged
         entries = orchestrator.event_log.get_all_entries()
@@ -580,10 +660,41 @@ class TestAgentHandleErrorHandling:
 class TestAgentHandlePerformance:
     """Test performance characteristics of AgentHandle operations."""
 
+    def setup_agent_permissions(
+        self, orchestrator: Orchestrator, agent_ids: list[str]
+    ) -> None:
+        """Setup permissions and world state for test agents."""
+        validator = orchestrator.effect_validator
+        if hasattr(validator, "set_agent_permissions"):
+            # Grant all necessary permissions for testing
+            permissions = {
+                "submit_intent",
+                "intent:speak",
+                "intent:move",
+                "intent:interact",
+                "intent:custom",
+            }
+            for agent_id in agent_ids:
+                validator.set_agent_permissions(agent_id, permissions)
+
+        # Add agents to world state so they are not "not_in_world"
+        for agent_id in agent_ids:
+            orchestrator.world_state.entities[agent_id] = {
+                "id": agent_id,
+                "type": "agent",
+                "position": {"x": 0, "y": 0},  # Add default position for Move intents
+            }
+            # Also add to spatial_index for Move intent validation
+            orchestrator.world_state.spatial_index[agent_id] = (0.0, 0.0, 0.0)
+
     @pytest.fixture
     def orchestrator(self) -> Orchestrator:
         """Create orchestrator for testing."""
-        config = OrchestratorConfig(max_agents=100)
+        config = OrchestratorConfig(
+            max_agents=100,
+            use_in_memory_dedup=True,
+            processing_idle_shutdown_ms=0.0,  # Disable idle shutdown for tests
+        )
         return Orchestrator(config, world_id="perf_test")
 
     @pytest.fixture
@@ -619,12 +730,20 @@ class TestAgentHandlePerformance:
         self, orchestrator: Orchestrator, observation_policy: DefaultObservationPolicy
     ) -> None:
         """Test performance with multiple agents operating concurrently."""
+        await orchestrator.initialize()
+
         # Register multiple agents
         num_agents = 10
         handles = []
+        agent_ids = []
         for i in range(num_agents):
-            handle = await orchestrator.register_agent(f"agent_{i}", observation_policy)
+            agent_id = f"agent_{i}"
+            handle = await orchestrator.register_agent(agent_id, observation_policy)
             handles.append(handle)
+            agent_ids.append(agent_id)
+
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, agent_ids)
 
         # Submit intents from all agents concurrently
         start_time = asyncio.get_running_loop().time()
@@ -650,6 +769,9 @@ class TestAgentHandlePerformance:
         # All should complete within reasonable time (1 second for 10 agents)
         assert processing_time < 1.0
         assert len(req_ids) == num_agents
+
+        # Wait for all intents to be processed
+        await asyncio.sleep(0.1)
 
         # Verify all effects were logged
         entries = orchestrator.event_log.get_all_entries()

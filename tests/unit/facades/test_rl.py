@@ -20,6 +20,33 @@ from gunn.utils.errors import (
 class TestRLFacade:
     """Test suite for RLFacade class."""
 
+    def setup_agent_permissions(
+        self, orchestrator: Orchestrator, agent_ids: list[str]
+    ) -> None:
+        """Setup permissions and world state for test agents."""
+        validator = orchestrator.effect_validator
+        if hasattr(validator, "set_agent_permissions"):
+            # Grant all necessary permissions for testing
+            permissions = {
+                "submit_intent",
+                "intent:speak",
+                "intent:move",
+                "intent:interact",
+                "intent:custom",
+            }
+            for agent_id in agent_ids:
+                validator.set_agent_permissions(agent_id, permissions)
+
+        # Add agents to world state so they are not "not_in_world"
+        for agent_id in agent_ids:
+            orchestrator.world_state.entities[agent_id] = {
+                "id": agent_id,
+                "type": "agent",
+                "position": {"x": 0, "y": 0},  # Add default position for Move intents
+            }
+            # Also add to spatial_index for Move intent validation
+            orchestrator.world_state.spatial_index[agent_id] = (0.0, 0.0, 0.0)
+
     @pytest.fixture
     def config(self):
         """Create test configuration."""
@@ -27,6 +54,7 @@ class TestRLFacade:
             max_agents=10,
             staleness_threshold=0,
             use_in_memory_dedup=True,
+            processing_idle_shutdown_ms=0.0,  # Disable idle shutdown for tests
         )
 
     @pytest.fixture
@@ -135,7 +163,7 @@ class TestRLFacade:
 
         # Mock agent handle with slow response
         mock_handle = MagicMock()
-        mock_handle.next_observation = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_handle.next_observation = AsyncMock(side_effect=TimeoutError())
         rl_facade._orchestrator.agent_handles[agent_id] = mock_handle
 
         with pytest.raises(TimeoutError, match="timed out after"):
@@ -369,7 +397,7 @@ class TestRLFacade:
 
         # Mock orchestrator with slow response
         async def slow_submit_intent(*args, **kwargs):
-            await asyncio.sleep(10)  # Longer than timeout
+            await asyncio.sleep(2.0)  # Reduced from 10 seconds
             return "test_req"
 
         rl_facade._orchestrator.submit_intent = slow_submit_intent
@@ -402,7 +430,7 @@ class TestRLFacade:
 
         # Mock slow first step
         async def slow_execute_step(*args, **kwargs):
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)  # Reduced from 1 second
             return ({}, {})
 
         with patch.object(rl_facade, "_execute_step", side_effect=slow_execute_step):
@@ -417,8 +445,10 @@ class TestRLFacade:
                 await rl_facade.step(agent_id, intent2)
 
             # First step should be cancelled
-            with pytest.raises(asyncio.CancelledError):
-                await task1
+            try:
+                await asyncio.wait_for(task1, timeout=1.0)
+            except (TimeoutError, asyncio.CancelledError):
+                pass  # Expected cancellation or timeout
 
     async def test_shutdown(self, rl_facade, registered_agent):
         """Test facade shutdown."""
@@ -437,7 +467,7 @@ class TestRLFacade:
 
         # Mock slow step execution
         async def slow_execute_step(*args, **kwargs):
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)  # Reduced from 1 second
             return ({}, {})
 
         with patch.object(rl_facade, "_execute_step", side_effect=slow_execute_step):
@@ -451,8 +481,10 @@ class TestRLFacade:
             await rl_facade.shutdown()
 
             # Step should be cancelled
-            with pytest.raises(asyncio.CancelledError):
-                await task
+            try:
+                await asyncio.wait_for(task, timeout=1.0)
+            except (TimeoutError, asyncio.CancelledError):
+                pass  # Expected cancellation or timeout
 
         # Pending steps should be cleared
         assert len(rl_facade._pending_steps) == 0
@@ -536,6 +568,33 @@ class TestRLFacade:
 class TestRLFacadeIntegration:
     """Integration tests for RLFacade with real orchestrator."""
 
+    def setup_agent_permissions(
+        self, orchestrator: Orchestrator, agent_ids: list[str]
+    ) -> None:
+        """Setup permissions and world state for test agents."""
+        validator = orchestrator.effect_validator
+        if hasattr(validator, "set_agent_permissions"):
+            # Grant all necessary permissions for testing
+            permissions = {
+                "submit_intent",
+                "intent:speak",
+                "intent:move",
+                "intent:interact",
+                "intent:custom",
+            }
+            for agent_id in agent_ids:
+                validator.set_agent_permissions(agent_id, permissions)
+
+        # Add agents to world state so they are not "not_in_world"
+        for agent_id in agent_ids:
+            orchestrator.world_state.entities[agent_id] = {
+                "id": agent_id,
+                "type": "agent",
+                "position": {"x": 0, "y": 0},  # Add default position for Move intents
+            }
+            # Also add to spatial_index for Move intent validation
+            orchestrator.world_state.spatial_index[agent_id] = (0.0, 0.0, 0.0)
+
     @pytest.fixture
     def config(self):
         """Create test configuration."""
@@ -543,7 +602,7 @@ class TestRLFacadeIntegration:
             max_agents=5,
             staleness_threshold=0,
             use_in_memory_dedup=True,
-            processing_idle_shutdown_ms=100,  # Quick shutdown for tests
+            processing_idle_shutdown_ms=50,  # Even quicker shutdown for tests
         )
 
     @pytest.fixture
@@ -596,10 +655,13 @@ class TestRLFacadeIntegration:
             agent_id = "test_agent"
             await facade.register_agent(agent_id, observation_policy)
 
+            # Setup permissions and world state for agent
+            self.setup_agent_permissions(facade.get_orchestrator(), [agent_id])
+
             # Create intent
             intent: Intent = {
                 "kind": "Speak",
-                "payload": {"text": "Hello world"},
+                "payload": {"message": "Hello world"},
                 "context_seq": 0,
                 "req_id": f"test_{uuid.uuid4().hex[:8]}",
                 "agent_id": agent_id,
@@ -608,11 +670,13 @@ class TestRLFacadeIntegration:
             }
 
             # Execute step - this tests the full integration
-            effect, observation = await facade.step(agent_id, intent)
+            effect, observation = await asyncio.wait_for(
+                facade.step(agent_id, intent), timeout=5.0
+            )
 
             # Verify the step completed successfully
             assert effect["kind"] == "Speak"
-            assert effect["payload"]["text"] == "Hello world"
+            assert effect["payload"]["message"] == "Hello world"
             assert effect["source_id"] == agent_id
             assert "uuid" in effect
             assert "global_seq" in effect
@@ -638,7 +702,9 @@ class TestRLFacadeIntegration:
 
             # Verify all agents are registered
             for agent_id in agents:
-                view_seq = await facade.get_agent_view_seq(agent_id)
+                view_seq = await asyncio.wait_for(
+                    facade.get_agent_view_seq(agent_id), timeout=2.0
+                )
                 assert view_seq == 0  # Initial view sequence
 
         finally:

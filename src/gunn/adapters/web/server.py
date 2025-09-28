@@ -12,6 +12,7 @@ Requirements addressed:
 
 import asyncio
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -81,7 +82,9 @@ class ErrorResponse(BaseModel):
 
     error: str = Field(..., description="Error type")
     message: str = Field(..., description="Error message")
-    details: dict[str, Any] | None = Field(None, description="Additional details")
+    details: dict[str, Any] | None = Field(
+        default=None, description="Additional details"
+    )
 
 
 class RateLimiter:
@@ -151,7 +154,7 @@ class WebAdapter:
 
         # Create FastAPI app with lifespan
         @asynccontextmanager
-        async def lifespan(app: FastAPI):
+        async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             # Startup
             await self.orchestrator.initialize()
             self.logger.info("Web adapter started")
@@ -216,7 +219,7 @@ class WebAdapter:
                 )
 
         @self.app.get("/health")
-        async def health_check():
+        async def health_check() -> dict[str, Any]:
             """Health check endpoint."""
             return {"status": "healthy", "timestamp": time.time()}
 
@@ -312,7 +315,7 @@ class WebAdapter:
                         details={
                             "queue_type": e.queue_type,
                             "current_depth": e.current_depth,
-                            "max_depth": e.max_depth,
+                            "max_depth": e.threshold,
                             "policy": e.policy,
                         },
                     ).model_dump(),
@@ -338,7 +341,7 @@ class WebAdapter:
                     detail=ErrorResponse(
                         error="INTERNAL_ERROR",
                         message="Internal server error",
-                    ).dict(),
+                    ).model_dump(),
                 ) from e
 
         @self.app.get(

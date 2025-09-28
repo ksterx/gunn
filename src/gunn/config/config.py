@@ -7,7 +7,7 @@ with environment variable support and feature flags.
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -221,7 +221,7 @@ def load_config_from_file(config_path: Path) -> Config:
         if config_data is None:
             config_data = {}
 
-        return Config(**config_data)
+        return Config.model_validate(config_data)
 
     except FileNotFoundError as e:
         raise ConfigError(f"Configuration file not found: {config_path}") from e
@@ -249,7 +249,7 @@ def load_config_from_env() -> Config:
     Returns:
         Configuration loaded from environment variables
     """
-    config_data = {}
+    config_data: dict[str, Any] = {}
 
     # Environment and debug
     if env_val := os.getenv("GUNN_ENVIRONMENT"):
@@ -318,7 +318,7 @@ def load_config_from_env() -> Config:
         config_data["orchestrator"] = orchestrator_config
 
     try:
-        return Config(**config_data)
+        return Config.model_validate(config_data)
     except ValidationError as e:
         raise ConfigError(f"Environment configuration validation failed: {e}") from e
 
@@ -344,14 +344,14 @@ def load_config(config_path: Path | None = None) -> Config:
     if config_path and config_path.exists():
         file_config = load_config_from_file(config_path)
         # Merge file config with defaults
-        config = Config(
-            **{**config.model_dump(), **file_config.model_dump(exclude_unset=True)}
+        config = Config.model_validate(
+            {**config.model_dump(), **file_config.model_dump(exclude_unset=True)}
         )
 
     # Load from environment (highest priority)
     env_config = load_config_from_env()
-    config = Config(
-        **{**config.model_dump(), **env_config.model_dump(exclude_unset=True)}
+    config = Config.model_validate(
+        {**config.model_dump(), **env_config.model_dump(exclude_unset=True)}
     )
 
     return config

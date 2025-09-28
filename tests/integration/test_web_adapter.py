@@ -19,8 +19,8 @@ from gunn.policies.observation import ObservationPolicy
 from gunn.schemas.messages import WorldState
 
 
-class TestObservationPolicy(ObservationPolicy):
-    """Test observation policy for integration tests."""
+class MockObservationPolicy(ObservationPolicy):
+    """Mock observation policy for integration tests."""
 
     def __init__(self):
         from gunn.policies.observation import PolicyConfig
@@ -106,7 +106,7 @@ async def web_adapter(orchestrator, auth_tokens):
     )
 
     # Register test agents
-    policy = TestObservationPolicy()
+    policy = MockObservationPolicy()
     await orchestrator.register_agent("agent1", policy)
     await orchestrator.register_agent("agent2", policy)
 
@@ -365,7 +365,7 @@ class TestWebAdapterWebSocket:
                     data = json.loads(message)
                     assert "view_seq" in data
                     assert "patches" in data
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # This is expected since we don't have proper observation distribution
                     pass
 

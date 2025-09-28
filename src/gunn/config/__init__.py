@@ -10,6 +10,7 @@ from .config import (
     FeatureFlags,
     load_config,
     load_config_from_env,
+    load_config_from_file,
     validate_config,
 )
 from .deployment import DeploymentConfig, HealthCheckConfig
@@ -18,12 +19,13 @@ from .environment import Environment, get_environment
 __all__ = [
     "Config",
     "ConfigError",
+    "DeploymentConfig",
+    "Environment",
     "FeatureFlags",
+    "HealthCheckConfig",
+    "get_environment",
     "load_config",
     "load_config_from_env",
+    "load_config_from_file",
     "validate_config",
-    "DeploymentConfig",
-    "HealthCheckConfig",
-    "Environment",
-    "get_environment",
 ]

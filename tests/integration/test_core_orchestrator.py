@@ -17,6 +17,33 @@ from gunn.schemas.types import Intent
 class TestOrchestratorIntegration:
     """Integration tests for complete orchestrator workflows."""
 
+    def setup_agent_permissions(
+        self, orchestrator: Orchestrator, agent_ids: list[str]
+    ) -> None:
+        """Setup permissions and world state for test agents."""
+        validator = orchestrator.effect_validator
+        if hasattr(validator, "set_agent_permissions"):
+            # Grant all necessary permissions for testing
+            permissions = {
+                "submit_intent",
+                "intent:speak",
+                "intent:move",
+                "intent:interact",
+                "intent:custom",
+            }
+            for agent_id in agent_ids:
+                validator.set_agent_permissions(agent_id, permissions)
+
+        # Add agents to world state so they are not "not_in_world"
+        for agent_id in agent_ids:
+            orchestrator.world_state.entities[agent_id] = {
+                "id": agent_id,
+                "type": "agent",
+                "position": {"x": 0, "y": 0},  # Add default position for Move intents
+            }
+            # Also add to spatial_index for Move intent validation
+            orchestrator.world_state.spatial_index[agent_id] = (0.0, 0.0, 0.0)
+
     @pytest.fixture
     def config(self) -> OrchestratorConfig:
         """Create test configuration."""
@@ -24,12 +51,17 @@ class TestOrchestratorIntegration:
             max_agents=10,
             staleness_threshold=1,
             default_priority=5,
+            processing_idle_shutdown_ms=0.0,  # Disable idle shutdown for tests
+            dedup_warmup_minutes=0,  # Disable warmup period for tests
+            use_in_memory_dedup=True,  # Use in-memory dedup store for tests
         )
 
     @pytest.fixture
-    def orchestrator(self, config: OrchestratorConfig) -> Orchestrator:
+    def orchestrator(self, config: OrchestratorConfig, request) -> Orchestrator:
         """Create orchestrator for integration testing."""
-        return Orchestrator(config, world_id="integration_test")
+        # Use test function name as world_id to ensure test isolation
+        world_id = f"test_{request.function.__name__}"
+        return Orchestrator(config, world_id=world_id)
 
     @pytest.fixture
     def observation_policy(self) -> DefaultObservationPolicy:
@@ -52,6 +84,9 @@ class TestOrchestratorIntegration:
         bob = await orchestrator.register_agent("bob", observation_policy)
         charlie = await orchestrator.register_agent("charlie", observation_policy)
 
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, ["alice", "bob", "charlie"])
+
         # Verify registration
         assert orchestrator.get_agent_count() == 3
         assert alice.agent_id == "alice"
@@ -61,7 +96,7 @@ class TestOrchestratorIntegration:
         # Alice speaks first
         alice_intent: Intent = {
             "kind": "Speak",
-            "payload": {"text": "Hello everyone!"},
+            "payload": {"message": "Hello everyone!"},
             "context_seq": 0,
             "req_id": "alice_msg_1",
             "agent_id": "alice",
@@ -75,7 +110,7 @@ class TestOrchestratorIntegration:
         # Bob responds
         bob_intent: Intent = {
             "kind": "Speak",
-            "payload": {"text": "Hi Alice! How are you?"},
+            "payload": {"message": "Hi Alice! How are you?"},
             "context_seq": 1,
             "req_id": "bob_msg_1",
             "agent_id": "bob",
@@ -89,7 +124,7 @@ class TestOrchestratorIntegration:
         # Charlie joins the conversation
         charlie_intent: Intent = {
             "kind": "Speak",
-            "payload": {"text": "Hey folks! What's going on?"},
+            "payload": {"message": "Hey folks! What's going on?"},
             "context_seq": 2,
             "req_id": "charlie_msg_1",
             "agent_id": "charlie",
@@ -99,6 +134,17 @@ class TestOrchestratorIntegration:
 
         req_id_3 = await charlie.submit_intent(charlie_intent)
         assert req_id_3 == "charlie_msg_1"
+
+        # Wait for all intents to be processed (poll until we have 3 entries)
+        max_wait_time = 5.0  # seconds
+        start_time = asyncio.get_event_loop().time()
+        while True:
+            entries = orchestrator.event_log.get_all_entries()
+            if len(entries) >= 3:
+                break
+            if asyncio.get_event_loop().time() - start_time > max_wait_time:
+                break
+            await asyncio.sleep(0.01)  # Small delay
 
         # Verify all events were logged in correct order
         entries = orchestrator.event_log.get_all_entries()
@@ -115,9 +161,9 @@ class TestOrchestratorIntegration:
         assert entries[2].effect["global_seq"] == 3
 
         # Verify content
-        assert entries[0].effect["payload"]["text"] == "Hello everyone!"
-        assert entries[1].effect["payload"]["text"] == "Hi Alice! How are you?"
-        assert entries[2].effect["payload"]["text"] == "Hey folks! What's going on?"
+        assert entries[0].effect["payload"]["message"] == "Hello everyone!"
+        assert entries[1].effect["payload"]["message"] == "Hi Alice! How are you?"
+        assert entries[2].effect["payload"]["message"] == "Hey folks! What's going on?"
 
     @pytest.mark.asyncio
     async def test_cancellation_workflow(
@@ -159,10 +205,13 @@ class TestOrchestratorIntegration:
         # Register agent
         agent = await orchestrator.register_agent("test_agent", observation_policy)
 
+        # Setup permissions and world state for agent
+        self.setup_agent_permissions(orchestrator, ["test_agent"])
+
         # Create intent
         intent: Intent = {
             "kind": "Move",
-            "payload": {"x": 10, "y": 20},
+            "payload": {"to": [10.0, 20.0, 0.0]},
             "context_seq": 0,
             "req_id": "move_1",
             "agent_id": "test_agent",
@@ -179,11 +228,22 @@ class TestOrchestratorIntegration:
         # All should return same req_id
         assert all(req_id == "move_1" for req_id in req_ids)
 
+        # Wait for intent to be processed (poll until we have 1 entry)
+        max_wait_time = 5.0  # seconds
+        start_time = asyncio.get_event_loop().time()
+        while True:
+            entries = orchestrator.event_log.get_all_entries()
+            if len(entries) >= 1:
+                break
+            if asyncio.get_event_loop().time() - start_time > max_wait_time:
+                break
+            await asyncio.sleep(0.01)  # Small delay
+
         # Should only have one effect in log
         entries = orchestrator.event_log.get_all_entries()
         assert len(entries) == 1
         assert entries[0].effect["kind"] == "Move"
-        assert entries[0].effect["payload"] == {"x": 10, "y": 20}
+        assert entries[0].effect["payload"]["to"] == [10.0, 20.0, 0.0]
 
     @pytest.mark.asyncio
     async def test_deterministic_ordering_under_load(
@@ -192,9 +252,15 @@ class TestOrchestratorIntegration:
         """Test deterministic ordering under concurrent load."""
         # Register multiple agents
         agents = []
+        agent_ids = []
         for i in range(5):
-            agent = await orchestrator.register_agent(f"agent_{i}", observation_policy)
+            agent_id = f"agent_{i}"
+            agent = await orchestrator.register_agent(agent_id, observation_policy)
             agents.append(agent)
+            agent_ids.append(agent_id)
+
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, agent_ids)
 
         # Create intents with different priorities
         intents = []
@@ -213,6 +279,17 @@ class TestOrchestratorIntegration:
         # Submit all intents concurrently
         tasks = [agent.submit_intent(intent) for agent, intent in intents]
         await asyncio.gather(*tasks)
+
+        # Wait for all intents to be processed (poll until we have 5 entries)
+        max_wait_time = 5.0  # seconds
+        start_time = asyncio.get_event_loop().time()
+        while True:
+            entries = orchestrator.event_log.get_all_entries()
+            if len(entries) >= 5:
+                break
+            if asyncio.get_event_loop().time() - start_time > max_wait_time:
+                break
+            await asyncio.sleep(0.01)  # Small delay
 
         # Verify all effects were logged
         entries = orchestrator.event_log.get_all_entries()
@@ -247,6 +324,9 @@ class TestOrchestratorIntegration:
         # Register agent and submit intent
         agent = await orchestrator.register_agent("test_agent", observation_policy)
 
+        # Setup permissions and world state for agent
+        self.setup_agent_permissions(orchestrator, ["test_agent"])
+
         intent: Intent = {
             "kind": "Custom",
             "payload": {"data": "test"},
@@ -258,6 +338,17 @@ class TestOrchestratorIntegration:
         }
 
         await agent.submit_intent(intent)
+
+        # Wait for intent to be processed (poll until we have 1 entry)
+        max_wait_time = 5.0  # seconds
+        start_time = asyncio.get_event_loop().time()
+        while True:
+            entries = orchestrator.event_log.get_all_entries()
+            if len(entries) >= 1:
+                break
+            if asyncio.get_event_loop().time() - start_time > max_wait_time:
+                break
+            await asyncio.sleep(0.01)  # Small delay
 
         # Verify effect has sim_time
         entries = orchestrator.event_log.get_all_entries()
@@ -280,9 +371,15 @@ class TestOrchestratorIntegration:
         """Test complete orchestrator shutdown workflow."""
         # Set up complex state
         agents = []
+        agent_ids = []
         for i in range(3):
-            agent = await orchestrator.register_agent(f"agent_{i}", observation_policy)
+            agent_id = f"agent_{i}"
+            agent = await orchestrator.register_agent(agent_id, observation_policy)
             agents.append(agent)
+            agent_ids.append(agent_id)
+
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, agent_ids)
 
         # Issue some cancel tokens
         tokens = []
@@ -303,10 +400,20 @@ class TestOrchestratorIntegration:
             }
             await agent.submit_intent(intent)
 
+        # Wait for all intents to be processed (poll until we have 3 entries)
+        max_wait_time = 5.0  # seconds
+        start_time = asyncio.get_event_loop().time()
+        while True:
+            entries = orchestrator.event_log.get_all_entries()
+            if len(entries) >= 3:
+                break
+            if asyncio.get_event_loop().time() - start_time > max_wait_time:
+                break
+            await asyncio.sleep(0.01)  # Small delay
+
         # Verify state before shutdown
         assert orchestrator.get_agent_count() == 3
         assert len(orchestrator._cancel_tokens) == 3
-        assert len(orchestrator._req_id_dedup) == 3
         assert orchestrator.event_log.get_entry_count() == 3
 
         # Shutdown
@@ -315,7 +422,6 @@ class TestOrchestratorIntegration:
         # Verify cleanup (but event log should remain)
         assert orchestrator.get_agent_count() == 0
         assert len(orchestrator._cancel_tokens) == 0
-        assert len(orchestrator._req_id_dedup) == 0
         assert orchestrator.event_log.get_entry_count() == 3  # Log persists
 
     @pytest.mark.asyncio

@@ -8,6 +8,26 @@ import pytest
 import requests
 
 
+def docker_available():
+    """Check if Docker is available and running."""
+    try:
+        result = subprocess.run(
+            ["docker", "version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False
+
+
+# Skip all Docker tests if Docker is not available
+pytestmark = pytest.mark.skipif(
+    not docker_available(), reason="Docker is not available or not running"
+)
+
+
 class TestDockerIntegration:
     """Test Docker deployment integration."""
 
@@ -108,9 +128,9 @@ class TestDockerIntegration:
                 text=True,
             )
 
-            assert (
-                result.returncode == 0
-            ), f"{compose_file} syntax error: {result.stderr}"
+            assert result.returncode == 0, (
+                f"{compose_file} syntax error: {result.stderr}"
+            )
 
     def test_deployment_scripts_executable(self):
         """Test that deployment scripts are executable."""
