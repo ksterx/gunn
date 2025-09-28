@@ -18,13 +18,18 @@ from .core import (
     OrchestratorConfig,
 )
 
+# Facade exports
+from .facades import MessageFacade, RLFacade
+
 __all__ = [
     "AgentHandle",
     "DefaultEffectValidator",
     "EffectValidator",
     "EventLog",
     "EventLogEntry",
+    "MessageFacade",
     "Orchestrator",
     "OrchestratorConfig",
+    "RLFacade",
     "__version__",
 ]

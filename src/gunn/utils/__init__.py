@@ -28,6 +28,14 @@ from .hashing import (
     validate_hash_chain,
     verify_sequence_integrity,
 )
+from .memory import (
+    MemoryConfig,
+    MemoryManager,
+    MemoryStats,
+    SnapshotManager,
+    ViewCache,
+    WorldStateSnapshot,
+)
 from .scheduling import PriorityScheduler, WeightedRoundRobinScheduler
 from .timing import TimedQueue
 
@@ -41,16 +49,22 @@ __all__ = [
     "DropNewestPolicy",
     "ErrorRecoveryPolicy",
     "IntentConflictError",
+    "MemoryConfig",
+    "MemoryManager",
+    "MemoryStats",
     "PriorityScheduler",
     "QuotaExceededError",
     "RecoveryAction",
     "ShedOldestPolicy",
     "SimulationError",
+    "SnapshotManager",
     "StaleContextError",
     "TimedQueue",
     "TimeoutError",
     "ValidationError",
+    "ViewCache",
     "WeightedRoundRobinScheduler",
+    "WorldStateSnapshot",
     "backpressure_manager",
     "canonical_json",
     "chain_checksum",

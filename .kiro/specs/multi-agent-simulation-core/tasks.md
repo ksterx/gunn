@@ -131,7 +131,7 @@
   - Write unit tests for cancellation timing and staleness accuracy
   - _Requirements: 4.1, 4.2, 4.3, 4.7_
 
-- [-] 12. Create error handling and recovery system
+- [x] 12. Create error handling and recovery system
   - Implement structured error types: StaleContextError, IntentConflictError, QuotaExceededError
   - Add ErrorRecoveryPolicy with configurable recovery strategies
   - Create CircuitBreaker class for fault tolerance with failure thresholds
@@ -141,7 +141,7 @@
   - Write unit tests for error scenarios, recovery behavior, and backpressure triggers
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 13. Build RL-style facade interface
+- [x] 13. Build RL-style facade interface
   - Create RLFacade class wrapping Orchestrator functionality
   - Implement observe(agent_id) method returning current observations
   - Add step(agent_id, intent) method returning (Effect, ObservationDelta) tuple
@@ -149,7 +149,7 @@
   - Write unit tests for RL-style interaction patterns
   - _Requirements: 5.1, 5.2, 5.5_
 
-- [ ] 14. Build message-oriented facade interface
+- [x] 14. Build message-oriented facade interface
   - Create MessageFacade class for event-driven interactions
   - Implement emit() method for broadcasting events through observation policies
   - Add message subscription and filtering based on agent policies
@@ -166,7 +166,7 @@
   - Write unit tests for metrics accuracy and performance impact
   - _Requirements: 14.1, 14.2, 14.3, 14.4_
 
-- [ ] 16. Create memory management and compaction
+- [x] 16. Create memory management and compaction
   - Implement MemoryManager class with configurable limits
   - Add WorldState snapshot creation every N events for faster replay
   - Create log compaction while preserving replay capability
@@ -174,7 +174,7 @@
   - Write unit tests for memory limits and compaction correctness
   - _Requirements: 7.3, 11.4_
 
-- [ ] 17. Build Web adapter for external integration
+- [-] 17. Build Web adapter for external integration
   - Create FastAPI-based Web adapter with REST endpoints for intent submission
   - Add WebSocket support for real-time observation streaming
   - Implement authentication and authorization per agent_id/world_id

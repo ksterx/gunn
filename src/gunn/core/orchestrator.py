@@ -22,6 +22,7 @@ from gunn.utils.errors import (
     StaleContextError,
     ValidationError,
 )
+from gunn.utils.memory import MemoryConfig, MemoryManager
 from gunn.utils.scheduling import WeightedRoundRobinScheduler
 from gunn.utils.telemetry import (
     MonotonicClock,
@@ -157,6 +158,14 @@ class OrchestratorConfig:
         quota_tokens_per_minute: int = 10000,
         use_in_memory_dedup: bool = False,
         processing_idle_shutdown_ms: float = 250.0,
+        # Memory management settings
+        max_log_entries: int = 10000,
+        view_cache_size: int = 1000,
+        compaction_threshold: int = 5000,
+        snapshot_interval: int = 1000,
+        max_snapshots: int = 10,
+        memory_check_interval_seconds: float = 60.0,
+        auto_compaction_enabled: bool = True,
     ):
         """Initialize orchestrator configuration.
 
@@ -177,6 +186,13 @@ class OrchestratorConfig:
             quota_tokens_per_minute: Token quota per agent per minute
             use_in_memory_dedup: Use in-memory dedup store for testing
             processing_idle_shutdown_ms: Idle duration before background intent loop auto-stops (<=0 disables)
+            max_log_entries: Maximum number of log entries before compaction
+            view_cache_size: Maximum size of view cache
+            compaction_threshold: Threshold for triggering log compaction
+            snapshot_interval: Create snapshot every N events
+            max_snapshots: Maximum number of snapshots to keep
+            memory_check_interval_seconds: Interval between memory checks
+            auto_compaction_enabled: Enable automatic log compaction
         """
         self.max_agents = max_agents
         self.staleness_threshold = staleness_threshold
@@ -194,6 +210,14 @@ class OrchestratorConfig:
         self.quota_tokens_per_minute = quota_tokens_per_minute
         self.use_in_memory_dedup = use_in_memory_dedup
         self.processing_idle_shutdown_ms = processing_idle_shutdown_ms
+        # Memory management settings
+        self.max_log_entries = max_log_entries
+        self.view_cache_size = view_cache_size
+        self.compaction_threshold = compaction_threshold
+        self.snapshot_interval = snapshot_interval
+        self.max_snapshots = max_snapshots
+        self.memory_check_interval_seconds = memory_check_interval_seconds
+        self.auto_compaction_enabled = auto_compaction_enabled
 
 
 class Orchestrator:
@@ -286,6 +310,18 @@ class Orchestrator:
         self._agent_interrupt_policies: dict[
             str, str
         ] = {}  # agent_id -> policy ("always" | "only_conflict")
+
+        # Memory management
+        memory_config = MemoryConfig(
+            max_log_entries=config.max_log_entries,
+            view_cache_size=config.view_cache_size,
+            compaction_threshold=config.compaction_threshold,
+            snapshot_interval=config.snapshot_interval,
+            max_snapshots=config.max_snapshots,
+            memory_check_interval_seconds=config.memory_check_interval_seconds,
+            auto_compaction_enabled=config.auto_compaction_enabled,
+        )
+        self.memory_manager = MemoryManager(memory_config)
 
         # Logging
         self._logger = get_logger("gunn.orchestrator", world_id=world_id)
@@ -468,6 +504,14 @@ class Orchestrator:
 
         # Update world state based on effect
         await self._apply_effect_to_world_state(effect)
+
+        # Check if snapshot should be created and create it if needed
+        await self.memory_manager.check_and_create_snapshot(
+            effect["global_seq"], self.world_state, effect["sim_time"]
+        )
+
+        # Check memory limits and trigger compaction if needed
+        await self.memory_manager.check_memory_limits(self.event_log)
 
         # Generate and distribute observations to affected agents
         await self._distribute_observations(effect)
@@ -1568,6 +1612,44 @@ class Orchestrator:
             "schema_version": "1.0.0",
         }
 
+    def get_memory_stats(self) -> dict[str, Any]:
+        """Get comprehensive memory management statistics.
+
+        Returns:
+            Dictionary with detailed memory statistics including log entries,
+            snapshots, view cache, and compaction information.
+        """
+        return self.memory_manager.get_detailed_stats(self.event_log)
+
+    async def force_compaction(self) -> int:
+        """Force log compaction regardless of thresholds.
+
+        Returns:
+            Number of entries removed during compaction
+        """
+        return await self.memory_manager.compact_log(self.event_log)
+
+    async def create_snapshot(self) -> Any:
+        """Force creation of a WorldState snapshot.
+
+        Returns:
+            Created snapshot
+        """
+        return await self.memory_manager.snapshot_manager.create_snapshot(
+            self._global_seq, self.world_state, self._current_sim_time()
+        )
+
+    def evict_old_views(self, max_age_seconds: float = 3600.0) -> int:
+        """Evict old cached views to free memory.
+
+        Args:
+            max_age_seconds: Maximum age for cached views
+
+        Returns:
+            Number of views evicted
+        """
+        return self.memory_manager.evict_old_views(max_age_seconds)
+
     async def shutdown(self) -> None:
         """Shutdown orchestrator and clean up resources."""
         self._logger.info("Starting orchestrator shutdown")
@@ -1591,6 +1673,9 @@ class Orchestrator:
         # Close all agent queues
         for queue in self._per_agent_queues.values():
             await queue.close()
+
+        # Cleanup memory manager
+        await self.memory_manager.cleanup()
 
         # Clear state
         self.agent_handles.clear()

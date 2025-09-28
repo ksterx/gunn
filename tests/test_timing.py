@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from .timing import TimedQueue
+from gunn.utils.timing import TimedQueue
 
 
 class TestTimedQueue:
