@@ -1,21 +1,10 @@
 """Unit tests for telemetry utilities."""
 
-import asyncio
 import time
-from unittest.mock import patch
 
-import pytest
 import structlog
 
 from gunn.utils.telemetry import (
-    MonotonicClock,
-    PerformanceTimer,
-    async_performance_timer,
-    get_logger,
-    get_timing_context,
-    pii_redaction_processor,
-    record_cancellation,
-    record_queue_depth,
     redact_pii,
     setup_logging,
 )
@@ -63,6 +52,7 @@ class TestPIIRedaction:
         assert redact_pii(None) is None
         assert redact_pii([1, 2, 3]) == [1, 2, 3]
 
+
 class TestLoggingSetup:
     """Test logging setup functionality."""
 
@@ -97,4 +87,3 @@ class TestPerformanceImpact:
         # Should complete 1000 redactions in reasonable time (< 1 second)
         duration = end_time - start_time
         assert duration < 1.0, f"PII redaction took too long: {duration:.3f}s"
-

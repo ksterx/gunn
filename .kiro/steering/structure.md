@@ -6,151 +6,117 @@
 gunn/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml          # CI pipeline (lint, type, test, contract)
-├── .kiro/                  # Kiro IDE configuration
-│   ├── steering/          # AI assistant guidance documents
-│   └── specs/             # Feature specifications and design docs
-├── docs/                   # External documentation
-│   ├── product.md         # Product overview
-│   ├── tech.md            # Technology stack
-│   └── structure.md       # Project structure
-├── schemas/                # Contract definitions (golden files)
-│   ├── openapi.yaml       # REST API contract
-│   └── proto/             # Protocol buffer definitions
-├── tests/                  # Integration, performance, and contract tests
-│   ├── integration/       # Cross-component tests
-│   ├── performance/       # Benchmark and SLO validation
-│   └── contract/          # API contract validation
-├── src/gunn/              # Main package source code
-│   ├── __init__.py        # Package entry point
-│   └── py.typed           # Type checking marker
-├── dist/                  # Build artifacts (wheels, sdist)
-├── .venv/                 # Virtual environment (uv managed)
-├── pyproject.toml         # Project configuration and dependencies
-├── uv.lock                # Dependency lock file
-├── LICENSE                # Open source license
-├── CONTRIBUTING.md        # Contribution guidelines
-├── CODE_OF_CONDUCT.md     # Community standards
-├── SECURITY.md            # Security policy
-└── README.md              # Project documentation
+│       └── ci.yml          # CI pipeline (lint, type checks, tests, contracts)
+├── .kiro/                  # Kiro guidance and specs consumed by the AI agent
+│   ├── steering/
+│   └── specs/
+├── docs/                   # Human-facing documentation (kept in sync with steering docs)
+│   ├── product.md
+│   ├── structure.md
+│   └── tech.md
+├── schemas/                # Contract definitions checked in CI
+│   ├── README.md
+│   ├── openapi.yaml
+│   └── proto/
+│       └── simulation.proto
+├── src/gunn/               # Python package (see layout below)
+├── tests/                  # Repository-level tests (integration, performance, contract)
+│   ├── contract/
+│   ├── integration/
+│   ├── performance/
+│   └── test_*.py
+├── dist/                   # Build artifacts (created by `uv build`, may be absent locally)
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── LICENSE
+├── README.md
+├── SECURITY.md
+├── TEST_STATUS.md
+├── pyproject.toml          # Project + tool configuration
+└── uv.lock                 # Dependency lock file
 ```
 
-## Source Code Organization
-
-The `src/gunn/` directory contains the core implementation with clear separation of concerns:
+## Source Code Organization (current implementation)
 
 ```
 src/gunn/
-├── __init__.py             # Public API exports
-├── py.typed                # Type checking marker
-├── core/                   # Core simulation engine
-│   ├── orchestrator.py     # Central coordinator
-│   ├── event_log.py        # Immutable event storage
-│   ├── world_state.py      # Current state projection
-│   └── agent_handle.py     # Per-agent interface
-├── policies/               # Observation and validation policies
-│   ├── observation.py      # Partial observation filtering
-│   └── validation.py       # Intent validation rules
-├── facades/                # API interfaces
-│   ├── rl_facade.py        # RL-style env.step() interface
-│   └── message_facade.py   # Event-driven messaging
-├── adapters/               # External system integration (subpackages)
-│   ├── web/                # Web adapter components
-│   │   ├── __init__.py     # Web adapter public interface
-│   │   ├── app.py          # FastAPI application setup
-│   │   ├── routes.py       # REST endpoint handlers
-│   │   ├── ws.py           # WebSocket handlers
-│   │   └── auth.py         # Authentication and authorization
-│   ├── unity/              # Unity game engine integration
-│   │   └── __init__.py     # Unity adapter interface
-│   └── llm/                # LLM streaming integration
-│       └── __init__.py     # LLM adapter interface
-├── storage/                # Persistent storage layer
-│   ├── dedup_store.py      # Deduplication storage (aiosqlite)
-│   └── snapshots.py        # WorldState snapshot storage
-├── schemas/                # Python schema definitions
-│   ├── messages.py         # Pydantic models for messages
-│   └── types.py            # TypedDict definitions and core types
-├── utils/                  # Shared utilities
-│   ├── timing.py           # TimedQueue and monotonic clock
-│   ├── hashing.py          # Hash chain integrity
-│   ├── errors.py           # Structured error types
-│   └── telemetry.py        # Logging, metrics, and tracing aggregation
-└── cli/                    # Command-line interface
-    ├── __main__.py         # Entry point for `python -m gunn`
-    └── replay.py           # Event log replay utility
+├── __init__.py             # Public exports (Orchestrator, AgentHandle, etc.)
+├── __main__.py             # Allows `python -m gunn`
+├── adapters/               # Adapter namespaces (placeholders until tasks 17–19)
+│   ├── __init__.py
+│   ├── llm/__init__.py
+│   ├── unity/__init__.py
+│   └── web/__init__.py
+├── cli/
+│   ├── __init__.py
+│   ├── __main__.py
+│   └── replay.py           # Deterministic replay CLI (implemented)
+├── core/
+│   ├── __init__.py
+│   ├── event_log.py        # Append-only log with hash chain + concurrency tests
+│   └── orchestrator.py     # Orchestrator, AgentHandle, default validator (stubbed logic)
+├── facades/
+│   └── __init__.py         # Placeholder package for upcoming RL/message facades
+├── policies/
+│   ├── __init__.py
+│   └── observation.py      # Partial observation filtering + JSON Patch deltas
+├── schemas/
+│   ├── __init__.py
+│   ├── messages.py         # Pydantic models (WorldState, View, etc.)
+│   └── types.py            # TypedDicts (Intent, Effect, ObservationDelta, CancelToken)
+├── storage/
+│   ├── __init__.py
+│   └── dedup_store.py      # SQLite + in-memory deduplication store
+└── utils/
+    ├── __init__.py
+    ├── errors.py           # Structured error types (StaleContextError, etc.)
+    ├── hashing.py          # Hash chain utilities
+    ├── hashing_demo.py     # Example usage (dev aid)
+    ├── scheduling.py       # Weighted round-robin scheduler
+    ├── telemetry.py        # Logging, Prometheus metrics, timers
+    └── timing.py           # TimedQueue / monotonic clock helpers (+ demos/tests)
 ```
 
-## Key Design Principles
+- Unit tests for core utilities live alongside their modules (`test_*.py` inside `src/gunn/**`).
+- Repository-level integration/performance/contract tests are in `tests/`.
+- Snapshot storage, validation policies, and facade implementations are tracked in `tasks.md` and not yet present in the tree.
 
-### Schema and Storage Separation
-- **Contract definitions**: `schemas/` contains golden files (openapi.yaml, proto/) for CI drift detection
-- **Python schemas**: `src/gunn/schemas/` contains Pydantic/TypedDict definitions
-- **Storage layer**: `src/gunn/storage/` handles SQLite and persistent data separately
+## Key Design Principles (still applicable)
 
-### Observability Centralization
-- **Telemetry hub**: `utils/telemetry.py` aggregates logging, metrics, and tracing initialization
-- **Common helpers**: Structured logging with PII redaction, Prometheus metrics, OpenTelemetry setup
+- **Schema separation**: Contract files live in `schemas/`; runtime models live in `src/gunn/schemas/`.
+- **Deterministic core**: `core/orchestrator.py` and `core/event_log.py` enforce ordering and log integrity.
+- **Observation policies**: `policies/observation.py` encapsulates filtering/delta logic with configurable limits.
+- **Two-phase processing**: Orchestrator handles idempotency, quotas, backpressure, fairness, then effect emission.
+- **Telemetry**: `utils/telemetry.py` centralises logging + metrics; metrics server start is opt-in via `start_metrics_server`.
 
-### Adapter Subpackaging
-- **Role separation**: Each adapter (web/, unity/, llm/) is a subpackage with clear responsibilities
-- **Web adapter**: Separate routes.py, ws.py, auth.py for maintainability
-- **Extensibility**: Easy to add new adapters without affecting core
+## Configuration & Tooling Files
 
-### Two-Tier Testing Structure
-- **Unit tests**: Co-located with source code using `test_*.py` pattern
-- **Integration/Performance**: Centralized in `tests/` for CI pipeline efficiency
-- **Contract tests**: `tests/contract/` validates API schema compliance
-
-### CLI Entry Point
-- **Module execution**: `cli/__main__.py` enables `python -m gunn` command
-- **Extensible commands**: Easy to add replay, benchmark, and other utilities
-
-## Configuration Files
-
-- **pyproject.toml**: Project metadata, dependencies, and tool configuration
-- **uv.lock**: Exact dependency versions for reproducible builds
-- **.python-version**: Python version specification for uv
-- **.gitignore**: Standard Python gitignore with build artifacts
-- **.github/workflows/ci.yml**: CI pipeline with contract validation
+- `pyproject.toml` configures Hatchling, uv integration, dependencies, Ruff, MyPy, and Pytest.
+- `uv.lock` locks dependency versions.
+- `.github/workflows/ci.yml` runs formatting, linting, typing, tests, and contract drift checks.
+- CI/formatting assumes `uv` for environment management; local `.venv` directories are optional and not checked in.
 
 ## Development Conventions
 
-- **Package structure**: Use `src/` layout for proper import testing
-- **Type annotations**: All public APIs must have complete type hints
-- **Async by default**: Use `async/await` for all I/O operations
-- **Error handling**: Structured exceptions with recovery actions
-- **Testing**: Unit tests co-located, integration tests in `tests/`
-- **Documentation**: Docstrings for all public classes and methods
-- **Contract validation**: CI checks for schema drift in golden files
+- `src/` layout with explicit `py.typed` for type checkers.
+- Strict typing in production code; tests relax some MyPy rules via overrides.
+- Async-first design: orchestration, queues, and stores expose async APIs.
+- Docs and steering guides mirror each other—update `docs/` and `.kiro/steering/` together.
 
 ## Import Patterns
 
 ```python
-# Public API imports (from __init__.py)
-from gunn import Orchestrator, AgentHandle, WorldState
+# Public API imports
+from gunn import Orchestrator, AgentHandle, OrchestratorConfig
 
-# Internal imports (within package)
+# Internal usage examples
 from gunn.core.orchestrator import Orchestrator
 from gunn.policies.observation import ObservationPolicy
-from gunn.utils.errors import StaleContextError
 from gunn.schemas.types import Intent, Effect
 from gunn.storage.dedup_store import DedupStore
-from gunn.utils.telemetry import setup_logging, get_metrics
+from gunn.utils.telemetry import setup_logging, PerformanceTimer
 ```
-
-## File Naming Conventions
-
-- **Modules**: `snake_case.py` (e.g., `event_log.py`)
-- **Classes**: `PascalCase` (e.g., `EventLog`, `AgentHandle`)
-- **Functions/methods**: `snake_case` (e.g., `submit_intent()`)
-- **Constants**: `UPPER_SNAKE_CASE` (e.g., `DEFAULT_PRIORITY`)
-- **Private members**: Leading underscore (e.g., `_global_seq`)
 
 ## Open Source Metadata
 
-For OSS compliance, include these files at repository root:
-- **LICENSE**: Open source license (MIT, Apache 2.0, etc.)
-- **CONTRIBUTING.md**: Contribution guidelines and development setup
-- **CODE_OF_CONDUCT.md**: Community standards and behavior expectations
-- **SECURITY.md**: Security policy and vulnerability reporting process
+- Root documents (`LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`) stay in sync with GitHub publishing expectations.

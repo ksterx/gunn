@@ -8,3 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+# uv local cache
+.uv-cache/
+# Deduplication store artifacts
+*_dedup.db
+*_dedup.db-shm
+*_dedup.db-wal

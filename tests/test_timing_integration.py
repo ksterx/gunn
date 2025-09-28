@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from .timing import TimedQueue
+from gunn.utils.timing import TimedQueue
 
 
 @pytest.mark.asyncio

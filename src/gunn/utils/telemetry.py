@@ -43,6 +43,31 @@ CANCEL_RATE = Counter(
     "gunn_cancellations_total", "Total number of cancellations", ["agent_id", "reason"]
 )
 
+QUEUE_DEPTH_HIGH_WATERMARK = Histogram(
+    "gunn_queue_depth_high_watermark",
+    "High watermark for queue depths triggering backpressure",
+    ["agent_id", "queue_type"],
+    buckets=[0, 1, 5, 10, 25, 50, 100, 250, 500, 1000],
+)
+
+BACKPRESSURE_EVENTS = Counter(
+    "gunn_backpressure_events_total",
+    "Total number of backpressure events",
+    ["agent_id", "queue_type", "policy"],
+)
+
+CIRCUIT_BREAKER_STATE = Counter(
+    "gunn_circuit_breaker_state_changes_total",
+    "Circuit breaker state changes",
+    ["component", "from_state", "to_state"],
+)
+
+ERROR_RECOVERY_ACTIONS = Counter(
+    "gunn_error_recovery_actions_total",
+    "Error recovery actions taken",
+    ["error_type", "recovery_action", "agent_id"],
+)
+
 # PII patterns for redaction
 PII_PATTERNS = {
     "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
@@ -70,7 +95,7 @@ def redact_pii(text: Any) -> Any:
     """
     if not isinstance(text, str):
         return text
-    
+
     result = text
     for pii_type, pattern in PII_PATTERNS.items():
         result = pattern.sub(f"[REDACTED_{pii_type.upper()}]", result)
@@ -297,6 +322,62 @@ def record_cancellation(agent_id: str, reason: str) -> None:
         reason: Cancellation reason
     """
     CANCEL_RATE.labels(agent_id=agent_id, reason=reason).inc()
+
+
+def record_queue_high_watermark(agent_id: str, queue_type: str, depth: int) -> None:
+    """Record queue depth high watermark for backpressure monitoring.
+
+    Args:
+        agent_id: Agent identifier
+        queue_type: Type of queue (agent_queue, system_queue, etc.)
+        depth: Queue depth that triggered high watermark
+    """
+    QUEUE_DEPTH_HIGH_WATERMARK.labels(agent_id=agent_id, queue_type=queue_type).observe(
+        depth
+    )
+
+
+def record_backpressure_event(agent_id: str, queue_type: str, policy: str) -> None:
+    """Record a backpressure event.
+
+    Args:
+        agent_id: Agent identifier
+        queue_type: Type of queue that triggered backpressure
+        policy: Backpressure policy applied (defer, shed_oldest, drop_newest)
+    """
+    BACKPRESSURE_EVENTS.labels(
+        agent_id=agent_id, queue_type=queue_type, policy=policy
+    ).inc()
+
+
+def record_circuit_breaker_state_change(
+    component: str, from_state: str, to_state: str
+) -> None:
+    """Record circuit breaker state change.
+
+    Args:
+        component: Component name with circuit breaker
+        from_state: Previous state (CLOSED, OPEN, HALF_OPEN)
+        to_state: New state (CLOSED, OPEN, HALF_OPEN)
+    """
+    CIRCUIT_BREAKER_STATE.labels(
+        component=component, from_state=from_state, to_state=to_state
+    ).inc()
+
+
+def record_error_recovery_action(
+    error_type: str, recovery_action: str, agent_id: str = "unknown"
+) -> None:
+    """Record an error recovery action.
+
+    Args:
+        error_type: Type of error that occurred
+        recovery_action: Recovery action taken
+        agent_id: Agent identifier (optional)
+    """
+    ERROR_RECOVERY_ACTIONS.labels(
+        error_type=error_type, recovery_action=recovery_action, agent_id=agent_id
+    ).inc()
 
 
 def start_metrics_server(port: int = 8000) -> None:

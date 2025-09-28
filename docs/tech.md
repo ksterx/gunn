@@ -2,61 +2,64 @@
 
 ## Build System & Package Management
 
-- **Build system**: Hatchling (modern Python packaging)
-- **Package manager**: uv (fast Python package management)
-- **Python version**: 3.13+ (required minimum)
+- **Build system**: Hatchling (configured via `pyproject.toml`)
+- **Package manager**: uv (fast resolver/runner used in CI and docs)
+- **Python version**: 3.13+ (type-checked against 3.13, compatible with 3.12 during transition)
 
-## Core Dependencies
+## Core Runtime Dependencies
 
-- **pydantic v2**: Data validation and JSON schema generation
-- **orjson**: High-performance JSON serialization with deterministic ordering
-- **jsonpatch**: RFC6902 JSON Patch operations for observation deltas
-- **structlog**: Structured logging with PII redaction
-- **asyncio**: Async/await concurrency model throughout
+- **pydantic v2** for data validation (`WorldState`, `View`, etc.) and schema generation.
+- **orjson** for deterministic JSON serialization along the event log.
+- **jsonpatch** to emit RFC6902 deltas per agent view.
+- **structlog** for structured logging with optional PII redaction.
+- **asyncio** primitives throughout the orchestrator, queues, and storage layers.
 
 ## Monitoring & Observability
 
-- **prometheus-client**: Metrics collection (queue depths, throughput, latency)
-- **OpenTelemetry**: Distributed tracing across adapters
-  - `opentelemetry-api`, `opentelemetry-sdk`, `opentelemetry-exporter-otlp`
-  - (Web adapter) `opentelemetry-instrumentation-fastapi`
-- **structlog**: Structured logging with `global_seq`, `view_seq`, `agent_id`, `req_id`
+- **prometheus-client** counters/histograms exported via helpers in `utils.telemetry`.
+- **OpenTelemetry** packages vendored for future tracing; instrumentation hooks are scaffolded but not yet wired into adapters.
+- **structlog** plus custom processors for PII redaction and performance timing.
 
-## External Integration
-- **FastAPI**: Web adapter with REST/WebSocket endpoints
-- **websockets**: Real-time communication with game engines
-- **SQLite**: Persistent storage (via `sqlite3` or `aiosqlite`) for deduplication and audit logs
+## External Integration Stack (planned vs current)
 
-## Development Tools
+- **FastAPI** and **websockets** are declared so the upcoming web adapter (Task 17) can expose REST/WebSocket APIs. Current code only contains placeholder modules.
+- **aiosqlite** backs the deduplication store; in-memory mode is available for tests.
+- Adapter packages (`src/gunn/adapters/{web,unity,llm}`) currently export stubs until their respective roadmap tasks land.
 
-- **ruff**: Fast Python linter and formatter
-- **mypy**: Static type checking
-- **pytest-asyncio**: Async testing framework
-- **pre-commit**: Git hooks for code quality
+## Development Tooling
+
+- **ruff** for linting + formatting (`uv run ruff format`, `uv run ruff check`).
+- **mypy** with strict settings on library code and relaxed rules for tests.
+- **pytest** / **pytest-asyncio** for unit and async integration tests.
+- **pre-commit** hooks mirror CI checks.
 
 ## Common Commands
 
 ```bash
-# Development setup
-uv sync                    # Install dependencies
-uv run pytest            # Run tests
-uv run ruff check         # Lint code
-uv run mypy src/          # Type check
+# Environment setup
+uv sync
 
-# Build and distribution
-uv build                  # Build wheel/sdist
-uv run python -m gunn     # Run CLI tools
+# Quality gates
+uv run ruff format
+uv run ruff check
+uv run mypy src/
+uv run pytest
 
-# Testing specific scenarios
-uv run pytest -k "test_cancellation"  # Test interruption behavior
-uv run pytest -k "test_determinism"   # Test replay consistency
+# Packaging & utilities
+uv build
+uv run python -m gunn replay --help
 ```
 
 ## Architecture Patterns
 
-- **Event-driven**: All state changes flow through immutable event log
-- **Two-phase commit**: Intent validation → Effect creation for consistency
-- **Policy separation**: ObservationPolicy and EffectValidator are independent
-- **Dependency injection**: Orchestrator accepts pluggable validators and policies
-- **Circuit breaker**: Fault tolerance with configurable failure thresholds
-- **Monotonic timing**: Internal timing via event loop's monotonic clock; wall-clock for logs only
+- **Event-driven core**: Effects append to an immutable log with hash chaining and replay support.
+- **Two-phase intent handling**: Idempotency → quota/backpressure → scheduling → validation → effect emission.
+- **Policy separation**: Observation policies inject filtering + latency logic; validator interface allows domain rules.
+- **Cancellation primitives**: Cancel tokens track generation state and reason codes.
+- **Telemetry hub**: Centralised logging/metrics ensures consistent observability across components.
+
+## Implementation Notes
+
+- Effect validation currently uses `DefaultEffectValidator` (allow-all) until Task 6 introduces domain checks.
+- OpenTelemetry exporters are present but not yet initialised; integrate once adapters emit spans.
+- RL/message facades and external adapters will start consuming FastAPI/websockets dependencies as the roadmap progresses.

@@ -316,18 +316,42 @@ class DefaultObservationPolicy(ObservationPolicy):
         if effect.get("source_id") == agent_id:
             return True
 
+        source_id = effect.get("source_id")
+        if not source_id:
+            return False
+
+        # Check if agent can observe the source entity of the effect
+        agent_position = world_state.spatial_index.get(agent_id, (0.0, 0.0, 0.0))
+        source_entity_data = world_state.entities.get(source_id, {})
+
+        # Check if agent can observe the source entity
+        can_observe_source = self._should_observe_entity(
+            source_id,
+            source_entity_data,
+            agent_id,
+            agent_position,
+            world_state,
+        )
+
+        if can_observe_source:
+            return True
+
         # Check if effect involves entities the agent can observe
         effect_payload = effect.get("payload", {})
 
         # For spatial effects, check distance
         if "position" in effect_payload:
             effect_position = effect_payload["position"]
-            agent_position = world_state.spatial_index.get(agent_id)
+            spatial_position: tuple[
+                float, float, float
+            ] | None = world_state.spatial_index.get(agent_id)
 
-            if agent_position and isinstance(effect_position, list | tuple):
+            if spatial_position is not None and isinstance(
+                effect_position, list | tuple
+            ):
                 if len(effect_position) >= 3:
                     distance = self._calculate_distance(
-                        agent_position, tuple(effect_position[:3])
+                        spatial_position, tuple(effect_position[:3])
                     )
                     if distance <= self.config.distance_limit:
                         return True
@@ -378,6 +402,10 @@ class DefaultObservationPolicy(ObservationPolicy):
         # Always observe self
         if entity_id == agent_id:
             return True
+
+        # Unknown entities are not observable unless explicitly configured
+        if entity_id not in world_state.entities:
+            return False
 
         # Check distance constraint
         entity_position = world_state.spatial_index.get(entity_id)
