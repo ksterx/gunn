@@ -603,3 +603,51 @@ class ErrorRecoveryPolicy:
         }
 
         return error.recovery_action in retryable_actions
+
+
+class LLMGenerationError(SimulationError):
+    """Error raised when LLM generation fails.
+
+    This error occurs when LLM token generation encounters
+    an unrecoverable error during streaming.
+
+    Requirements addressed:
+    - 6.1: Proper error handling for generation failures
+    - 10.3: Structured error codes for LLM failures
+    """
+
+    def __init__(self, message: str, provider: str = "unknown", model: str = "unknown"):
+        """Initialize LLM generation error.
+
+        Args:
+            message: Error message
+            provider: LLM provider name
+            model: Model name that failed
+        """
+        super().__init__(message, RecoveryAction.RETRY)
+        self.provider = provider
+        self.model = model
+
+
+class LLMTimeoutError(SimulationError):
+    """Error raised when LLM generation times out.
+
+    This error occurs when LLM generation exceeds the
+    configured timeout duration.
+
+    Requirements addressed:
+    - 6.3: Timeout handling for LLM generation
+    - 10.3: Structured error codes for timeout scenarios
+    """
+
+    def __init__(self, message: str, timeout_seconds: float, provider: str = "unknown"):
+        """Initialize LLM timeout error.
+
+        Args:
+            message: Error message
+            timeout_seconds: Timeout duration that was exceeded
+            provider: LLM provider name
+        """
+        super().__init__(message, RecoveryAction.RETRY_WITH_DELAY)
+        self.timeout_seconds = timeout_seconds
+        self.provider = provider

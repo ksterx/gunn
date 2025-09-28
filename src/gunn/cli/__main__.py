@@ -19,6 +19,10 @@ def main(args: list[str] | None = None) -> int:
         return 0
     elif command == "replay":
         return run_replay(args[1:])
+    elif command == "web":
+        return run_web(args[1:])
+    elif command == "config":
+        return run_config(args[1:])
     else:
         print(f"Unknown command: {command}")
         print_help()
@@ -36,6 +40,8 @@ Usage:
 Commands:
     version     Show version information
     replay      Replay event logs for debugging
+    web         Run web adapter server
+    config      Configuration management
     help        Show this help message
 
 Options:
@@ -63,6 +69,34 @@ def run_replay(args: list[str]) -> int:
     from gunn.cli.replay import run_replay_command
 
     return asyncio.run(run_replay_command(args))
+
+
+def run_web(args: list[str]) -> int:
+    """Run the web adapter command."""
+    import sys
+
+    from gunn.adapters.web.cli import cli
+
+    # Set up sys.argv for click command routing
+    original_argv = sys.argv
+    try:
+        sys.argv = ["gunn-web", *args]
+        cli()
+        return 0
+    except SystemExit as e:
+        return e.code or 0
+    except Exception as e:
+        print(f"Web adapter error: {e}")
+        return 1
+    finally:
+        sys.argv = original_argv
+
+
+def run_config(args: list[str]) -> int:
+    """Run the config command."""
+    from gunn.cli.config import run_config_command
+
+    return run_config_command(args)
 
 
 if __name__ == "__main__":

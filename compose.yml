@@ -1,0 +1,59 @@
+services:
+  gunn:
+    build: .
+    ports:
+      - "8080:8080"  # Web API
+      - "8000:8000"  # Metrics
+    environment:
+      - GUNN_ENVIRONMENT=production
+      - GUNN_LOG_LEVEL=INFO
+      - GUNN_LOG_FORMAT=json
+      - GUNN_FEATURES=latency,backpressure,telemetry,metrics,logging,pii,memory,compaction,caching,ratelimit
+      - GUNN_DATABASE_URL=sqlite:///data/gunn.db
+      - GUNN_MAX_AGENTS=1000
+      - GUNN_STALENESS_THRESHOLD=0
+      - GUNN_BACKPRESSURE_POLICY=defer
+    volumes:
+      - gunn_data:/app/data
+      - gunn_logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources
+    restart: unless-stopped
+
+volumes:
+  gunn_data:
+  gunn_logs:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,24 @@
+services:
+  gunn:
+    build:
+      context: .
+      target: builder
+    ports:
+      - "8080:8080"  # Web API
+      - "8000:8000"  # Metrics
+    environment:
+      - GUNN_ENVIRONMENT=development
+      - GUNN_DEBUG=true
+      - GUNN_LOG_LEVEL=DEBUG
+      - GUNN_LOG_FORMAT=text
+      - GUNN_FEATURES=latency,backpressure,telemetry,metrics,logging,memory,compaction,caching
+      - GUNN_DATABASE_URL=sqlite:///data/gunn_dev.db
+      - GUNN_MAX_AGENTS=100
+    volumes:
+      - .:/app
+      - gunn_dev_data:/app/data
+    restart: unless-stopped
+    command: ["python", "-m", "gunn", "web", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+
+volumes:
+  gunn_dev_data:

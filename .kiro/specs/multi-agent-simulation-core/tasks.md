@@ -73,7 +73,7 @@
   - Write documentation for external integration patterns
   - _Requirements: 13.1, 13.2, 13.3_
 
-- [ ] 6. Create EffectValidator for intent validation
+- [x] 6. Create EffectValidator for intent validation
   - Implement DefaultEffectValidator with basic validation logic
   - Add validate_intent() method checking world state constraints
   - Create validation for quota limits, cooldowns, and permissions
@@ -113,7 +113,7 @@
   - Write unit tests for cancellation timing accuracy within ±5ms tolerance
   - _Requirements: 6.2, 6.3, 11.2_
 
-- [ ] 10. Implement observation distribution system
+- [x] 10. Implement observation distribution system
   - Create broadcast_event() method converting EffectDraft to complete Effect with priority completion
   - Add config.default_priority completion for EffectDraft when priority is unspecified
   - Add observation delta generation for affected agents with max_patch_ops fallback
@@ -157,7 +157,7 @@
   - Write unit tests for message routing and delivery
   - _Requirements: 5.3, 5.4, 5.5_
 
-- [ ] 15. Add performance monitoring and metrics
+- [x] 15. Add performance monitoring and metrics
   - Implement structured logging with global_seq, view_seq, agent_id, req_id, latency_ms
   - Create Prometheus metrics for queue depths, cancel rates, conflicts, throughput
   - Add OpenTelemetry tracing support across components
@@ -174,7 +174,7 @@
   - Write unit tests for memory limits and compaction correctness
   - _Requirements: 7.3, 11.4_
 
-- [-] 17. Build Web adapter for external integration
+- [x] 17. Build Web adapter for external integration
   - Create FastAPI-based Web adapter with REST endpoints for intent submission
   - Add WebSocket support for real-time observation streaming
   - Implement authentication and authorization per agent_id/world_id
@@ -182,7 +182,7 @@
   - Write integration tests for Web API functionality
   - _Requirements: 8.3, 12.1, 12.4_
 
-- [ ] 18. Implement LLM adapter with streaming support
+- [x] 18. Implement LLM adapter with streaming support
   - Create LLM adapter with streaming token generation
   - Add cancel token integration for 100ms cancellation SLO
   - Implement token yield every 20-30ms for responsive interruption
@@ -198,7 +198,7 @@
   - Write integration tests with Unity simulation
   - _Requirements: 8.1, 8.4, 8.5_
 
-- [ ] 20. Add comprehensive integration testing
+- [x] 20. Add comprehensive integration testing
   - Create multi-agent conversation test with interruption scenarios
   - Implement performance tests validating SLOs: 20ms delivery, 100ms cancellation, 100 intents/sec
   - Add replay consistency tests ensuring identical behavior from same event log
@@ -217,7 +217,7 @@
   - Write security tests for isolation, access control, and quarantine behavior
   - _Requirements: 12.1, 12.2, 12.3, 12.5_
 
-- [ ] 22. Create configuration and deployment utilities
+- [x] 22. Create configuration and deployment utilities
   - Implement configuration validation and defaults
   - Add environment-specific configuration loading
   - Add GUNN_FEATURES environment variable for feature flags (latency, backpressure, etc.)
@@ -227,7 +227,7 @@
   - Write deployment tests and documentation
   - _Requirements: 13.1, 13.2, 13.3, 13.4_
 
-- [ ] 23. Build example applications and demos
+- [x] 23. Build example applications and demos
   - Create A/B/C conversation demo with visible interruption and regeneration
   - Implement 2D spatial simulation with movement and distance-based observation
   - Add Unity integration demo showing real-time agent interaction

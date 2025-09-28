@@ -1,0 +1,1089 @@
+<!doctype html>
+<html class="no-js" lang="ja" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="索引" href="genindex.html"><link rel="search" title="検索" href="search.html"><link rel="next" title="Web Adapter" href="web_adapter.html"><link rel="prev" title="Technology Stack" href="tech.html">
+        <link rel="canonical" href="https://ksterx.github.io/gunn/integration-patterns.html">
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+        <title>External Integration Patterns - gunn Documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+
+
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+
+      }
+    }
+  }
+</style></head>
+  <body>
+
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+<div class="announcement">
+  <aside class="announcement-content">
+     GitHub Pages で公開する最新版ドキュメントです。
+  </aside>
+</div>
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">gunn Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+
+  <span class="sidebar-brand-text">gunn Documentation</span>
+
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="検索" name="q" aria-label="検索">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">ガイド</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="product.html">Product Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="structure.html">Project Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tech.html">Technology Stack</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">External Integration Patterns</a></li>
+<li class="toctree-l1"><a class="reference internal" href="web_adapter.html">Web Adapter</a></li>
+<li class="toctree-l1"><a class="reference internal" href="errors.html">Error Codes and Status Mappings</a></li>
+<li class="toctree-l1"><a class="reference internal" href="build-and-deploy.html">ドキュメントビルドと公開手順</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API リファレンス</a><input aria-label="Toggle navigation of API リファレンス" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/orchestrator.html">Orchestrator API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/facades.html">Facades API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/adapters.html">Adapters API</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/integration-patterns.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="external-integration-patterns">
+<h1>External Integration Patterns<a class="headerlink" href="#external-integration-patterns" title="Link to this heading">¶</a></h1>
+<p>This document describes common patterns for integrating external systems with the Gunn multi-agent simulation core.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<p>The Gunn simulation core provides multiple integration points through standardized APIs:</p>
+<ul class="simple">
+<li><p><strong>REST API</strong>: HTTP endpoints for web applications and services</p></li>
+<li><p><strong>WebSocket</strong>: Real-time streaming for low-latency interactions</p></li>
+<li><p><strong>gRPC</strong>: High-performance binary protocol for game engines</p></li>
+<li><p><strong>Message-oriented</strong>: Event-driven patterns for loose coupling</p></li>
+</ul>
+</section>
+<section id="integration-patterns">
+<h2>Integration Patterns<a class="headerlink" href="#integration-patterns" title="Link to this heading">¶</a></h2>
+<section id="game-engine-integration-unity-unreal">
+<h3>1. Game Engine Integration (Unity/Unreal)<a class="headerlink" href="#game-engine-integration-unity-unreal" title="Link to this heading">¶</a></h3>
+<p>Game engines typically need bidirectional, low-latency communication with the simulation core.</p>
+<section id="unity-integration-pattern">
+<h4>Unity Integration Pattern<a class="headerlink" href="#unity-integration-pattern" title="Link to this heading">¶</a></h4>
+<div class="highlight-csharp notranslate"><div class="highlight"><pre><span></span><span class="c1">// Unity C# client using gRPC</span>
+<span class="k">using</span><span class="w"> </span><span class="nn">Gunn.Simulation.V1</span><span class="p">;</span>
+<span class="k">using</span><span class="w"> </span><span class="nn">Grpc.Core</span><span class="p">;</span>
+
+<span class="k">public</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">UnitySimulationClient</span><span class="w"> </span><span class="p">:</span><span class="w"> </span><span class="n">MonoBehaviour</span>
+<span class="p">{</span>
+<span class="w">    </span><span class="k">private</span><span class="w"> </span><span class="n">UnityAdapter</span><span class="p">.</span><span class="n">UnityAdapterClient</span><span class="w"> </span><span class="n">client</span><span class="p">;</span>
+<span class="w">    </span><span class="k">private</span><span class="w"> </span><span class="n">AsyncServerStreamingCall</span><span class="o">&lt;</span><span class="n">ObservationDelta</span><span class="o">&gt;</span><span class="w"> </span><span class="n">observationStream</span><span class="p">;</span>
+
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="k">void</span><span class="w"> </span><span class="nf">Start</span><span class="p">()</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Connect to simulation core</span>
+<span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Channel</span><span class="p">(</span><span class="s">&quot;localhost:50051&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">ChannelCredentials</span><span class="p">.</span><span class="n">Insecure</span><span class="p">);</span>
+<span class="w">        </span><span class="n">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">UnityAdapter</span><span class="p">.</span><span class="n">UnityAdapterClient</span><span class="p">(</span><span class="n">channel</span><span class="p">);</span>
+
+<span class="w">        </span><span class="c1">// Start observation stream</span>
+<span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">request</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">ObservationRequest</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">WorldId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;unity_world_001&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="n">AgentId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;player_agent&quot;</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="n">observationStream</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">StreamObservations</span><span class="p">(</span><span class="n">request</span><span class="p">);</span>
+
+<span class="w">        </span><span class="c1">// Process observations in background</span>
+<span class="w">        </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ProcessObservations</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">private</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="n">Task</span><span class="w"> </span><span class="nf">ProcessObservations</span><span class="p">()</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="k">await</span><span class="w"> </span><span class="nf">foreach</span><span class="w"> </span><span class="p">(</span><span class="kt">var</span><span class="w"> </span><span class="n">delta</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">observationStream</span><span class="p">.</span><span class="n">ResponseStream</span><span class="p">.</span><span class="n">ReadAllAsync</span><span class="p">())</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="c1">// Apply JSON patches to local game state</span>
+<span class="w">            </span><span class="n">ApplyObservationDelta</span><span class="p">(</span><span class="n">delta</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">public</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="k">void</span><span class="w"> </span><span class="nf">SubmitPlayerAction</span><span class="p">(</span><span class="kt">string</span><span class="w"> </span><span class="n">action</span><span class="p">,</span><span class="w"> </span><span class="n">Vector3</span><span class="w"> </span><span class="n">position</span><span class="p">)</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">intent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Intent</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">Kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Intent</span><span class="p">.</span><span class="n">Types</span><span class="p">.</span><span class="n">Kind</span><span class="p">.</span><span class="n">KindMove</span><span class="p">,</span>
+<span class="w">            </span><span class="n">AgentId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;player_agent&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="n">ReqId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">System</span><span class="p">.</span><span class="n">Guid</span><span class="p">.</span><span class="n">NewGuid</span><span class="p">().</span><span class="n">ToString</span><span class="p">(),</span>
+<span class="w">            </span><span class="n">ContextSeq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">currentViewSeq</span><span class="p">,</span>
+<span class="w">            </span><span class="n">Priority</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">            </span><span class="n">SchemaVersion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;1.0.0&quot;</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="c1">// Set payload with Unity-specific data</span>
+<span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">movePayload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">MovePayload</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">TargetPosition</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Vector3</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">X</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">position</span><span class="p">.</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">Y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">position</span><span class="p">.</span><span class="n">y</span><span class="p">,</span><span class="w"> </span><span class="n">Z</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">position</span><span class="p">.</span><span class="n">z</span><span class="w"> </span><span class="p">},</span>
+<span class="w">            </span><span class="n">Speed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">5.0f</span><span class="p">,</span>
+<span class="w">            </span><span class="n">Run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">true</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="n">intent</span><span class="p">.</span><span class="n">Payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Any</span><span class="p">.</span><span class="n">Pack</span><span class="p">(</span><span class="n">movePayload</span><span class="p">);</span>
+
+<span class="w">        </span><span class="k">try</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="kt">var</span><span class="w"> </span><span class="n">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">SubmitIntentAsync</span><span class="p">(</span><span class="n">intent</span><span class="p">);</span>
+<span class="w">            </span><span class="n">Debug</span><span class="p">.</span><span class="n">Log</span><span class="p">(</span><span class="s">$&quot;Intent accepted: {response.Status}&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="n">RpcException</span><span class="w"> </span><span class="n">ex</span><span class="p">)</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">Debug</span><span class="p">.</span><span class="n">LogError</span><span class="p">(</span><span class="s">$&quot;Intent failed: {ex.Status}&quot;</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Handle Unity physics events</span>
+<span class="w">    </span><span class="k">void</span><span class="w"> </span><span class="nf">OnCollisionEnter</span><span class="p">(</span><span class="n">Collision</span><span class="w"> </span><span class="n">collision</span><span class="p">)</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">collisionEvent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">CollisionEvent</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">Entity1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gameObject</span><span class="p">.</span><span class="n">name</span><span class="p">,</span>
+<span class="w">            </span><span class="n">Entity2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">collision</span><span class="p">.</span><span class="n">gameObject</span><span class="p">.</span><span class="n">name</span><span class="p">,</span>
+<span class="w">            </span><span class="n">ImpactForce</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">collision</span><span class="p">.</span><span class="n">impulse</span><span class="p">.</span><span class="n">magnitude</span><span class="p">,</span>
+<span class="w">            </span><span class="n">Position</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">Vector3</span>
+<span class="w">            </span><span class="p">{</span>
+<span class="w">                </span><span class="n">X</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">collision</span><span class="p">.</span><span class="n">contacts</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">point</span><span class="p">.</span><span class="n">x</span><span class="p">,</span>
+<span class="w">                </span><span class="n">Y</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">collision</span><span class="p">.</span><span class="n">contacts</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">point</span><span class="p">.</span><span class="n">y</span><span class="p">,</span>
+<span class="w">                </span><span class="n">Z</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">collision</span><span class="p">.</span><span class="n">contacts</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">point</span><span class="p">.</span><span class="n">z</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">effectDraft</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">new</span><span class="w"> </span><span class="n">EffectDraft</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">            </span><span class="n">Kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Collision&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="n">SourceId</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;unity_adapter&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="n">SchemaVersion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;1.0.0&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="n">Payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Any</span><span class="p">.</span><span class="n">Pack</span><span class="p">(</span><span class="n">collisionEvent</span><span class="p">)</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="n">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">EmitEffectAsync</span><span class="p">(</span><span class="n">effectDraft</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="key-unity-integration-points">
+<h4>Key Unity Integration Points<a class="headerlink" href="#key-unity-integration-points" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Time Synchronization</strong>: Unity sends TimeTick events to maintain simulation time</p></li>
+<li><p><strong>Physics Events</strong>: Collisions, triggers, and other physics events become Effects</p></li>
+<li><p><strong>Agent Actions</strong>: Player inputs and AI decisions become Intents</p></li>
+<li><p><strong>Visual Updates</strong>: ObservationDeltas drive visual state changes</p></li>
+<li><p><strong>Spatial Queries</strong>: Unity's spatial systems inform observation policies</p></li>
+</ol>
+</section>
+</section>
+<section id="web-application-integration">
+<h3>2. Web Application Integration<a class="headerlink" href="#web-application-integration" title="Link to this heading">¶</a></h3>
+<p>Web applications typically use REST APIs with WebSocket streaming for real-time updates.</p>
+<section id="javascript-typescript-web-client">
+<h4>JavaScript/TypeScript Web Client<a class="headerlink" href="#javascript-typescript-web-client" title="Link to this heading">¶</a></h4>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="c1">// Web client using REST API and WebSocket</span>
+<span class="kd">class</span><span class="w"> </span><span class="nx">SimulationClient</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">private</span><span class="w"> </span><span class="nx">baseUrl</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
+<span class="w">    </span><span class="k">private</span><span class="w"> </span><span class="nx">authToken</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span>
+<span class="w">    </span><span class="k">private</span><span class="w"> </span><span class="nx">websocket</span><span class="o">:</span><span class="w"> </span><span class="kt">WebSocket</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kr">constructor</span><span class="p">(</span><span class="nx">baseUrl</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">authToken</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">baseUrl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">baseUrl</span><span class="p">;</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">authToken</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">authToken</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Get current observation via REST</span>
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="nx">getObservation</span><span class="p">(</span><span class="nx">worldId</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">agentId</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="nb">Promise</span><span class="o">&lt;</span><span class="nx">View</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="nx">ObservationDelta</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch</span><span class="p">(</span>
+<span class="w">            </span><span class="sb">`</span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">baseUrl</span><span class="si">}</span><span class="sb">/worlds/</span><span class="si">${</span><span class="nx">worldId</span><span class="si">}</span><span class="sb">/agents/</span><span class="si">${</span><span class="nx">agentId</span><span class="si">}</span><span class="sb">/observe`</span><span class="p">,</span>
+<span class="w">            </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="s1">&#39;Authorization&#39;</span><span class="o">:</span><span class="w"> </span><span class="sb">`Bearer </span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">authToken</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span>
+<span class="w">                    </span><span class="s1">&#39;Content-Type&#39;</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;application/json&#39;</span>
+<span class="w">                </span><span class="p">}</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">);</span>
+
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">response</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">();</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">SimulationError</span><span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Submit intent via REST</span>
+<span class="w">    </span><span class="k">async</span><span class="w"> </span><span class="nx">submitIntent</span><span class="p">(</span><span class="nx">worldId</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">agentId</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">intent</span><span class="o">:</span><span class="w"> </span><span class="kt">IntentRequest</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="nb">Promise</span><span class="o">&lt;</span><span class="nx">IntentResponse</span><span class="o">&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">fetch</span><span class="p">(</span>
+<span class="w">            </span><span class="sb">`</span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">baseUrl</span><span class="si">}</span><span class="sb">/worlds/</span><span class="si">${</span><span class="nx">worldId</span><span class="si">}</span><span class="sb">/agents/</span><span class="si">${</span><span class="nx">agentId</span><span class="si">}</span><span class="sb">/intents`</span><span class="p">,</span>
+<span class="w">            </span><span class="p">{</span>
+<span class="w">                </span><span class="nx">method</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;POST&#39;</span><span class="p">,</span>
+<span class="w">                </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                    </span><span class="s1">&#39;Authorization&#39;</span><span class="o">:</span><span class="w"> </span><span class="sb">`Bearer </span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">authToken</span><span class="si">}</span><span class="sb">`</span><span class="p">,</span>
+<span class="w">                    </span><span class="s1">&#39;Content-Type&#39;</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;application/json&#39;</span>
+<span class="w">                </span><span class="p">},</span>
+<span class="w">                </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="kt">JSON.stringify</span><span class="p">(</span><span class="nx">intent</span><span class="p">)</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">);</span>
+
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">response</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">error</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">();</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">SimulationError</span><span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">json</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Stream observations via WebSocket</span>
+<span class="w">    </span><span class="nx">streamObservations</span><span class="p">(</span><span class="nx">worldId</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">agentId</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">onDelta</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">delta</span><span class="o">:</span><span class="w"> </span><span class="kt">ObservationDelta</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="ow">void</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="ow">void</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">wsUrl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sb">`</span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">baseUrl</span><span class="p">.</span><span class="nx">replace</span><span class="p">(</span><span class="s1">&#39;http&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;ws&#39;</span><span class="p">)</span><span class="si">}</span><span class="sb">/worlds/</span><span class="si">${</span><span class="nx">worldId</span><span class="si">}</span><span class="sb">/agents/</span><span class="si">${</span><span class="nx">agentId</span><span class="si">}</span><span class="sb">/stream`</span><span class="p">;</span>
+
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">websocket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">WebSocket</span><span class="p">(</span><span class="nx">wsUrl</span><span class="p">,</span><span class="w"> </span><span class="p">[],</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">headers</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="s1">&#39;Authorization&#39;</span><span class="o">:</span><span class="w"> </span><span class="sb">`Bearer </span><span class="si">${</span><span class="k">this</span><span class="p">.</span><span class="nx">authToken</span><span class="si">}</span><span class="sb">`</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">});</span>
+
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">websocket</span><span class="p">.</span><span class="nx">onmessage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">event</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">delta</span><span class="o">:</span><span class="w"> </span><span class="kt">ObservationDelta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">event</span><span class="p">.</span><span class="nx">data</span><span class="p">);</span>
+<span class="w">            </span><span class="nx">onDelta</span><span class="p">(</span><span class="nx">delta</span><span class="p">);</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">websocket</span><span class="p">.</span><span class="nx">onerror</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nx">console</span><span class="p">.</span><span class="nx">error</span><span class="p">(</span><span class="s1">&#39;WebSocket error:&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">error</span><span class="p">);</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">websocket</span><span class="p">.</span><span class="nx">onclose</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">event</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">event</span><span class="p">.</span><span class="nx">code</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="mf">1000</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                </span><span class="c1">// Reconnect on unexpected close</span>
+<span class="w">                </span><span class="nx">setTimeout</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">streamObservations</span><span class="p">(</span><span class="nx">worldId</span><span class="p">,</span><span class="w"> </span><span class="nx">agentId</span><span class="p">,</span><span class="w"> </span><span class="nx">onDelta</span><span class="p">),</span><span class="w"> </span><span class="mf">1000</span><span class="p">);</span>
+<span class="w">            </span><span class="p">}</span>
+<span class="w">        </span><span class="p">};</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Apply JSON Patch to local state</span>
+<span class="w">    </span><span class="nx">applyObservationDelta</span><span class="p">(</span><span class="nx">currentView</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">,</span><span class="w"> </span><span class="nx">delta</span><span class="o">:</span><span class="w"> </span><span class="kt">ObservationDelta</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="nx">any</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="kd">const</span><span class="w"> </span><span class="nx">jsonpatch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">require</span><span class="p">(</span><span class="s1">&#39;jsonpatch&#39;</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="nx">jsonpatch</span><span class="p">.</span><span class="nx">apply_patch</span><span class="p">(</span><span class="nx">currentView</span><span class="p">,</span><span class="w"> </span><span class="nx">delta</span><span class="p">.</span><span class="nx">patches</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Error handling</span>
+<span class="kd">class</span><span class="w"> </span><span class="nx">SimulationError</span><span class="w"> </span><span class="k">extends</span><span class="w"> </span><span class="ne">Error</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kr">constructor</span><span class="p">(</span><span class="k">public</span><span class="w"> </span><span class="nx">errorInfo</span><span class="o">:</span><span class="w"> </span><span class="kt">ErrorResponse</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">super</span><span class="p">(</span><span class="nx">errorInfo</span><span class="p">.</span><span class="nx">message</span><span class="p">);</span>
+<span class="w">        </span><span class="k">this</span><span class="p">.</span><span class="nx">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;SimulationError&#39;</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nx">get</span><span class="w"> </span><span class="nx">recoveryAction</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">errorInfo</span><span class="p">.</span><span class="nx">recovery_action</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="nx">get</span><span class="w"> </span><span class="nx">errorCode</span><span class="p">()</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">errorInfo</span><span class="p">.</span><span class="nx">code</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Usage example</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">SimulationClient</span><span class="p">(</span><span class="s1">&#39;https://api.gunn.example.com/v1&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;your-jwt-token&#39;</span><span class="p">);</span>
+
+<span class="c1">// Get initial observation</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">view</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">getObservation</span><span class="p">(</span><span class="s1">&#39;world_001&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;agent_001&#39;</span><span class="p">);</span>
+
+<span class="c1">// Submit speaking intent</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">submitIntent</span><span class="p">(</span><span class="s1">&#39;world_001&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;agent_001&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">kind</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Speak&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">payload</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">text</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Hello, world!&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">target_agent</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;agent_002&#39;</span><span class="w"> </span><span class="p">},</span>
+<span class="w">    </span><span class="nx">context_seq</span><span class="o">:</span><span class="w"> </span><span class="kt">view.view_seq</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">req_id</span><span class="o">:</span><span class="w"> </span><span class="kt">crypto.randomUUID</span><span class="p">(),</span>
+<span class="w">    </span><span class="nx">priority</span><span class="o">:</span><span class="w"> </span><span class="kt">1</span><span class="p">,</span>
+<span class="w">    </span><span class="nx">schema_version</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;1.0.0&#39;</span>
+<span class="p">});</span>
+
+<span class="c1">// Stream real-time updates</span>
+<span class="nx">client</span><span class="p">.</span><span class="nx">streamObservations</span><span class="p">(</span><span class="s1">&#39;world_001&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;agent_001&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">(</span><span class="nx">delta</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">updatedView</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">applyObservationDelta</span><span class="p">(</span><span class="nx">currentView</span><span class="p">,</span><span class="w"> </span><span class="nx">delta</span><span class="p">);</span>
+<span class="w">    </span><span class="nx">updateUI</span><span class="p">(</span><span class="nx">updatedView</span><span class="p">);</span>
+<span class="p">});</span>
+</pre></div>
+</div>
+</section>
+<section id="key-web-integration-points">
+<h4>Key Web Integration Points<a class="headerlink" href="#key-web-integration-points" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Authentication</strong>: JWT tokens or OAuth for API access</p></li>
+<li><p><strong>Real-time Updates</strong>: WebSocket streaming for low-latency observation deltas</p></li>
+<li><p><strong>Error Handling</strong>: Structured error responses with recovery actions</p></li>
+<li><p><strong>State Management</strong>: JSON Patch application for efficient UI updates</p></li>
+<li><p><strong>Offline Support</strong>: Local state caching and sync on reconnection</p></li>
+</ol>
+</section>
+</section>
+<section id="llm-service-integration">
+<h3>3. LLM Service Integration<a class="headerlink" href="#llm-service-integration" title="Link to this heading">¶</a></h3>
+<p>LLM services need streaming capabilities with cancellation support for intelligent interruption.</p>
+<section id="python-llm-adapter">
+<h4>Python LLM Adapter<a class="headerlink" href="#python-llm-adapter" title="Link to this heading">¶</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncIterator</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">openai</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">gunn.schemas.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">CancelToken</span><span class="p">,</span> <span class="n">Intent</span><span class="p">,</span> <span class="n">Effect</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">LLMAdapter</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">api_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gpt-4&quot;</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client</span> <span class="o">=</span> <span class="n">openai</span><span class="o">.</span><span class="n">AsyncOpenAI</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="n">api_key</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">generate_response</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">prompt</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">context</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+        <span class="n">cancel_token</span><span class="p">:</span> <span class="n">CancelToken</span><span class="p">,</span>
+        <span class="n">max_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">150</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AsyncIterator</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate streaming response with cancellation support.&quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">stream</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+                <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span>
+                <span class="n">messages</span><span class="o">=</span><span class="p">[</span>
+                    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;You are an AI agent in a simulation.&quot;</span><span class="p">},</span>
+                    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">prompt</span><span class="p">}</span>
+                <span class="p">],</span>
+                <span class="n">max_tokens</span><span class="o">=</span><span class="n">max_tokens</span><span class="p">,</span>
+                <span class="n">stream</span><span class="o">=</span><span class="kc">True</span>
+            <span class="p">)</span>
+
+            <span class="k">async</span> <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">stream</span><span class="p">:</span>
+                <span class="c1"># Check for cancellation every token</span>
+                <span class="k">if</span> <span class="n">cancel_token</span><span class="o">.</span><span class="n">cancelled</span><span class="p">:</span>
+                    <span class="k">await</span> <span class="n">stream</span><span class="o">.</span><span class="n">aclose</span><span class="p">()</span>
+                    <span class="k">return</span>
+
+                <span class="k">if</span> <span class="n">chunk</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">delta</span><span class="o">.</span><span class="n">content</span><span class="p">:</span>
+                    <span class="k">yield</span> <span class="n">chunk</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">delta</span><span class="o">.</span><span class="n">content</span>
+
+                <span class="c1"># Yield control every 20-30ms for responsive cancellation</span>
+                <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.025</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">cancel_token</span><span class="o">.</span><span class="n">cancelled</span><span class="p">:</span>
+                <span class="k">raise</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">process_intent</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">intent</span><span class="p">:</span> <span class="n">Intent</span><span class="p">,</span>
+        <span class="n">world_context</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+        <span class="n">cancel_token</span><span class="p">:</span> <span class="n">CancelToken</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Effect</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Process an intent and generate appropriate response.&quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="n">intent</span><span class="p">[</span><span class="s2">&quot;kind&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Speak&quot;</span><span class="p">:</span>
+            <span class="c1"># Generate speaking response</span>
+            <span class="n">prompt</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;Respond to: </span><span class="si">{</span><span class="n">intent</span><span class="p">[</span><span class="s1">&#39;payload&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;text&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+            <span class="n">response_text</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="k">async</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">generate_response</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">world_context</span><span class="p">,</span> <span class="n">cancel_token</span><span class="p">):</span>
+                <span class="n">response_text</span> <span class="o">+=</span> <span class="n">token</span>
+
+            <span class="k">if</span> <span class="n">cancel_token</span><span class="o">.</span><span class="n">cancelled</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>  <span class="c1"># Generation was cancelled</span>
+
+            <span class="c1"># Create effect for the response</span>
+            <span class="n">effect</span><span class="p">:</span> <span class="n">Effect</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;uuid&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()),</span>
+                <span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="s2">&quot;SpeakResponse&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;payload&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">response_text</span><span class="p">,</span>
+                    <span class="s2">&quot;agent_id&quot;</span><span class="p">:</span> <span class="n">intent</span><span class="p">[</span><span class="s2">&quot;agent_id&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;in_response_to&quot;</span><span class="p">:</span> <span class="n">intent</span><span class="p">[</span><span class="s2">&quot;req_id&quot;</span><span class="p">]</span>
+                <span class="p">},</span>
+                <span class="s2">&quot;global_seq&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>  <span class="c1"># Will be filled by orchestrator</span>
+                <span class="s2">&quot;sim_time&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span>  <span class="c1"># Will be filled by orchestrator</span>
+                <span class="s2">&quot;source_id&quot;</span><span class="p">:</span> <span class="s2">&quot;llm_adapter&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;schema_version&quot;</span><span class="p">:</span> <span class="s2">&quot;1.0.0&quot;</span>
+            <span class="p">}</span>
+
+            <span class="k">return</span> <span class="n">effect</span>
+
+        <span class="k">return</span> <span class="kc">None</span>
+
+<span class="c1"># Usage with orchestrator</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">handle_agent_intent</span><span class="p">(</span><span class="n">orchestrator</span><span class="p">,</span> <span class="n">intent</span><span class="p">:</span> <span class="n">Intent</span><span class="p">):</span>
+    <span class="c1"># Issue cancel token for this generation</span>
+    <span class="n">cancel_token</span> <span class="o">=</span> <span class="n">orchestrator</span><span class="o">.</span><span class="n">issue_cancel_token</span><span class="p">(</span><span class="n">intent</span><span class="p">[</span><span class="s2">&quot;agent_id&quot;</span><span class="p">],</span> <span class="n">intent</span><span class="p">[</span><span class="s2">&quot;req_id&quot;</span><span class="p">])</span>
+
+    <span class="c1"># Start LLM generation</span>
+    <span class="n">llm_adapter</span> <span class="o">=</span> <span class="n">LLMAdapter</span><span class="p">(</span><span class="n">api_key</span><span class="o">=</span><span class="s2">&quot;your-api-key&quot;</span><span class="p">)</span>
+    <span class="n">world_context</span> <span class="o">=</span> <span class="n">orchestrator</span><span class="o">.</span><span class="n">get_world_context</span><span class="p">(</span><span class="n">intent</span><span class="p">[</span><span class="s2">&quot;agent_id&quot;</span><span class="p">])</span>
+
+    <span class="c1"># Generate response with cancellation support</span>
+    <span class="n">effect</span> <span class="o">=</span> <span class="k">await</span> <span class="n">llm_adapter</span><span class="o">.</span><span class="n">process_intent</span><span class="p">(</span><span class="n">intent</span><span class="p">,</span> <span class="n">world_context</span><span class="p">,</span> <span class="n">cancel_token</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">effect</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">cancel_token</span><span class="o">.</span><span class="n">cancelled</span><span class="p">:</span>
+        <span class="c1"># Submit effect to orchestrator</span>
+        <span class="k">await</span> <span class="n">orchestrator</span><span class="o">.</span><span class="n">broadcast_event</span><span class="p">(</span><span class="n">effect</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">cancel_token</span><span class="o">.</span><span class="n">cancelled</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Generation cancelled: </span><span class="si">{</span><span class="n">cancel_token</span><span class="o">.</span><span class="n">reason</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="key-llm-integration-points">
+<h4>Key LLM Integration Points<a class="headerlink" href="#key-llm-integration-points" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Streaming Generation</strong>: Token-by-token generation with regular cancellation checks</p></li>
+<li><p><strong>Context Management</strong>: World state and conversation history as context</p></li>
+<li><p><strong>Cancellation Handling</strong>: Immediate halt on cancel token trigger</p></li>
+<li><p><strong>Error Recovery</strong>: Graceful handling of API failures and timeouts</p></li>
+<li><p><strong>Token Budgets</strong>: Respect token limits and quotas</p></li>
+</ol>
+</section>
+</section>
+<section id="multi-tenant-saas-integration">
+<h3>4. Multi-Tenant SaaS Integration<a class="headerlink" href="#multi-tenant-saas-integration" title="Link to this heading">¶</a></h3>
+<p>SaaS applications need tenant isolation, authentication, and rate limiting.</p>
+<section id="multi-tenant-architecture">
+<h4>Multi-Tenant Architecture<a class="headerlink" href="#multi-tenant-architecture" title="Link to this heading">¶</a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Tenant-aware client wrapper</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TenantSimulationClient</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">base_client</span><span class="p">,</span> <span class="n">tenant_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">api_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">base_client</span> <span class="o">=</span> <span class="n">base_client</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span> <span class="o">=</span> <span class="n">tenant_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_key</span> <span class="o">=</span> <span class="n">api_key</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create_world</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">world_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a new simulation world for this tenant.&quot;&quot;&quot;</span>
+        <span class="n">world_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># Initialize world with tenant-specific configuration</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_client</span><span class="o">.</span><span class="n">initialize_world</span><span class="p">(</span>
+            <span class="n">world_id</span><span class="o">=</span><span class="n">world_id</span><span class="p">,</span>
+            <span class="n">config</span><span class="o">=</span><span class="n">world_config</span><span class="p">,</span>
+            <span class="n">tenant_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">world_id</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">register_agent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">world_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">agent_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Register an agent in a tenant&#39;s world.&quot;&quot;&quot;</span>
+        <span class="c1"># Verify world belongs to this tenant</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">world_id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">PermissionError</span><span class="p">(</span><span class="s2">&quot;Cannot access world from different tenant&quot;</span><span class="p">)</span>
+
+        <span class="n">agent_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">agent_config</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># Apply tenant-specific observation policies</span>
+        <span class="n">observation_policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_tenant_policy</span><span class="p">(</span><span class="n">agent_config</span><span class="p">)</span>
+
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">base_client</span><span class="o">.</span><span class="n">register_agent</span><span class="p">(</span>
+            <span class="n">world_id</span><span class="o">=</span><span class="n">world_id</span><span class="p">,</span>
+            <span class="n">agent_id</span><span class="o">=</span><span class="n">agent_id</span><span class="p">,</span>
+            <span class="n">policy</span><span class="o">=</span><span class="n">observation_policy</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">agent_id</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_tenant_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">agent_config</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create observation policy with tenant-specific constraints.&quot;&quot;&quot;</span>
+        <span class="c1"># Apply tenant limits (e.g., observation range, relationship depth)</span>
+        <span class="n">max_distance</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">agent_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;observation_range&#39;</span><span class="p">,</span> <span class="mi">100</span><span class="p">),</span>
+                          <span class="bp">self</span><span class="o">.</span><span class="n">_get_tenant_limit</span><span class="p">(</span><span class="s1">&#39;max_observation_range&#39;</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="n">ObservationPolicy</span><span class="p">(</span>
+            <span class="n">distance_limit</span><span class="o">=</span><span class="n">max_distance</span><span class="p">,</span>
+            <span class="n">relationship_filter</span><span class="o">=</span><span class="n">agent_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;relationships&#39;</span><span class="p">,</span> <span class="p">[]),</span>
+            <span class="n">tenant_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">tenant_id</span>
+        <span class="p">)</span>
+
+<span class="c1"># Rate limiting and quotas</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TenantRateLimiter</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">redis_client</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">redis</span> <span class="o">=</span> <span class="n">redis_client</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">check_rate_limit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tenant_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">operation</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if tenant is within rate limits for operation.&quot;&quot;&quot;</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;rate_limit:</span><span class="si">{</span><span class="n">tenant_id</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">operation</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">redis</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+
+        <span class="n">limits</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;intents_per_minute&#39;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span>
+            <span class="s1">&#39;observations_per_minute&#39;</span><span class="p">:</span> <span class="mi">5000</span><span class="p">,</span>
+            <span class="s1">&#39;worlds_per_day&#39;</span><span class="p">:</span> <span class="mi">10</span>
+        <span class="p">}</span>
+
+        <span class="n">limit</span> <span class="o">=</span> <span class="n">limits</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">operation</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">current</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">(</span><span class="n">current</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="n">limit</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="c1"># Increment counter with expiration</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">redis</span><span class="o">.</span><span class="n">incr</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">redis</span><span class="o">.</span><span class="n">expire</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="mi">60</span><span class="p">)</span>  <span class="c1"># 1 minute window</span>
+
+        <span class="k">return</span> <span class="kc">True</span>
+</pre></div>
+</div>
+</section>
+<section id="key-multi-tenant-integration-points">
+<h4>Key Multi-Tenant Integration Points<a class="headerlink" href="#key-multi-tenant-integration-points" title="Link to this heading">¶</a></h4>
+<ol class="arabic simple">
+<li><p><strong>Tenant Isolation</strong>: World and agent IDs prefixed with tenant identifier</p></li>
+<li><p><strong>Resource Quotas</strong>: Per-tenant limits on worlds, agents, and operations</p></li>
+<li><p><strong>Rate Limiting</strong>: Per-tenant rate limits with Redis-based tracking</p></li>
+<li><p><strong>Data Segregation</strong>: Tenant-specific observation policies and access controls</p></li>
+<li><p><strong>Billing Integration</strong>: Usage tracking for metered billing</p></li>
+</ol>
+</section>
+</section>
+</section>
+<section id="error-handling-patterns">
+<h2>Error Handling Patterns<a class="headerlink" href="#error-handling-patterns" title="Link to this heading">¶</a></h2>
+<section id="structured-error-responses">
+<h3>Structured Error Responses<a class="headerlink" href="#structured-error-responses" title="Link to this heading">¶</a></h3>
+<p>All integrations should handle errors consistently using the structured format:</p>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="kd">interface</span><span class="w"> </span><span class="nx">ErrorResponse</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">error</span><span class="o">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">code</span><span class="o">:</span><span class="w"> </span><span class="kt">number</span><span class="p">;</span><span class="w">           </span><span class="c1">// From docs/errors.md</span>
+<span class="w">        </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span><span class="w">           </span><span class="c1">// Error constant name</span>
+<span class="w">        </span><span class="nx">message</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span><span class="w">        </span><span class="c1">// Human-readable message</span>
+<span class="w">        </span><span class="nx">details</span><span class="o">:</span><span class="w"> </span><span class="kt">any</span><span class="p">;</span><span class="w">           </span><span class="c1">// Structured error details</span>
+<span class="w">        </span><span class="nx">recovery_action</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span><span class="w"> </span><span class="c1">// Suggested recovery action</span>
+<span class="w">        </span><span class="nx">timestamp</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span><span class="w">      </span><span class="c1">// ISO 8601 timestamp</span>
+<span class="w">        </span><span class="nx">trace_id</span><span class="o">:</span><span class="w"> </span><span class="kt">string</span><span class="p">;</span><span class="w">       </span><span class="c1">// For distributed tracing</span>
+<span class="w">    </span><span class="p">};</span>
+<span class="p">}</span>
+
+<span class="c1">// Error handling with recovery actions</span>
+<span class="k">async</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">handleSimulationError</span><span class="p">(</span><span class="nx">error</span><span class="o">:</span><span class="w"> </span><span class="kt">ErrorResponse</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="nx">error</span><span class="p">.</span><span class="nx">recovery_action</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="s1">&#39;RETRY&#39;</span><span class="o">:</span>
+<span class="w">            </span><span class="k">await</span><span class="w"> </span><span class="nx">delay</span><span class="p">(</span><span class="mf">1000</span><span class="p">);</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">retryOperation</span><span class="p">();</span>
+
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="s1">&#39;RETRY_WITH_DELAY&#39;</span><span class="o">:</span>
+<span class="w">            </span><span class="kd">const</span><span class="w"> </span><span class="nx">backoff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">min</span><span class="p">(</span><span class="mf">1000</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">pow</span><span class="p">(</span><span class="mf">2</span><span class="p">,</span><span class="w"> </span><span class="nx">retryCount</span><span class="p">),</span><span class="w"> </span><span class="mf">30000</span><span class="p">);</span>
+<span class="w">            </span><span class="k">await</span><span class="w"> </span><span class="nx">delay</span><span class="p">(</span><span class="nx">backoff</span><span class="p">);</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">retryOperation</span><span class="p">();</span>
+
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="s1">&#39;REGENERATE&#39;</span><span class="o">:</span>
+<span class="w">            </span><span class="c1">// Cancel current generation and start fresh</span>
+<span class="w">            </span><span class="k">await</span><span class="w"> </span><span class="nx">cancelCurrentGeneration</span><span class="p">();</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">startNewGeneration</span><span class="p">();</span>
+
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="s1">&#39;MODIFY_INTENT&#39;</span><span class="o">:</span>
+<span class="w">            </span><span class="c1">// Prompt user to modify their intent</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">promptForIntentModification</span><span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="nx">error</span><span class="p">.</span><span class="nx">details</span><span class="p">);</span>
+
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="s1">&#39;DEFER&#39;</span><span class="o">:</span>
+<span class="w">            </span><span class="c1">// Queue for later processing</span>
+<span class="w">            </span><span class="k">return</span><span class="w"> </span><span class="nx">queueForLater</span><span class="p">();</span>
+
+<span class="w">        </span><span class="k">case</span><span class="w"> </span><span class="s1">&#39;ABORT&#39;</span><span class="o">:</span>
+<span class="w">            </span><span class="c1">// Permanent failure, notify user</span>
+<span class="w">            </span><span class="k">throw</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="ne">Error</span><span class="p">(</span><span class="nx">error</span><span class="p">.</span><span class="nx">error</span><span class="p">.</span><span class="nx">message</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="circuit-breaker-pattern">
+<h3>Circuit Breaker Pattern<a class="headerlink" href="#circuit-breaker-pattern" title="Link to this heading">¶</a></h3>
+<p>For resilient integrations, implement circuit breaker patterns:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">CircuitBreaker</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">failure_threshold</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="n">recovery_timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">30.0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">failure_threshold</span> <span class="o">=</span> <span class="n">failure_threshold</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">recovery_timeout</span> <span class="o">=</span> <span class="n">recovery_timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">failure_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_failure_time</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;CLOSED&quot;</span>  <span class="c1"># CLOSED, OPEN, HALF_OPEN</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;OPEN&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_failure_time</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">recovery_timeout</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;HALF_OPEN&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">CircuitBreakerOpenError</span><span class="p">(</span><span class="s2">&quot;Circuit breaker is open&quot;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;HALF_OPEN&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;CLOSED&quot;</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">failure_count</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">return</span> <span class="n">result</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">failure_count</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_failure_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">failure_count</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">failure_threshold</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;OPEN&quot;</span>
+            <span class="k">raise</span>
+
+<span class="c1"># Usage</span>
+<span class="n">circuit_breaker</span> <span class="o">=</span> <span class="n">CircuitBreaker</span><span class="p">()</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">submit_intent_with_circuit_breaker</span><span class="p">(</span><span class="n">intent</span><span class="p">):</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">circuit_breaker</span><span class="o">.</span><span class="n">call</span><span class="p">(</span><span class="n">simulation_client</span><span class="o">.</span><span class="n">submit_intent</span><span class="p">,</span> <span class="n">intent</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="performance-considerations">
+<h2>Performance Considerations<a class="headerlink" href="#performance-considerations" title="Link to this heading">¶</a></h2>
+<section id="connection-pooling">
+<h3>Connection Pooling<a class="headerlink" href="#connection-pooling" title="Link to this heading">¶</a></h3>
+<p>For high-throughput integrations, use connection pooling:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># gRPC connection pooling</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">GrpcConnectionPool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">pool_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">target</span> <span class="o">=</span> <span class="n">target</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pool</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Queue</span><span class="p">(</span><span class="n">maxsize</span><span class="o">=</span><span class="n">pool_size</span><span class="p">)</span>
+
+        <span class="c1"># Pre-populate pool</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">pool_size</span><span class="p">):</span>
+            <span class="n">channel</span> <span class="o">=</span> <span class="n">grpc</span><span class="o">.</span><span class="n">aio</span><span class="o">.</span><span class="n">insecure_channel</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">UnityAdapterStub</span><span class="p">(</span><span class="n">channel</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">put_nowait</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_client</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">get</span><span class="p">()</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">return_client</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">client</span><span class="p">):</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+
+    <span class="nd">@asynccontextmanager</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">client</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_client</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">client</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">return_client</span><span class="p">(</span><span class="n">client</span><span class="p">)</span>
+
+<span class="c1"># Usage</span>
+<span class="n">pool</span> <span class="o">=</span> <span class="n">GrpcConnectionPool</span><span class="p">(</span><span class="s2">&quot;localhost:50051&quot;</span><span class="p">)</span>
+
+<span class="k">async</span> <span class="k">with</span> <span class="n">pool</span><span class="o">.</span><span class="n">client</span><span class="p">()</span> <span class="k">as</span> <span class="n">client</span><span class="p">:</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">SubmitIntent</span><span class="p">(</span><span class="n">intent</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="batch-operations">
+<h3>Batch Operations<a class="headerlink" href="#batch-operations" title="Link to this heading">¶</a></h3>
+<p>For efficiency, batch multiple operations:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">batch_submit_intents</span><span class="p">(</span><span class="n">intents</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Intent</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">IntentResponse</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Submit multiple intents in a single batch.&quot;&quot;&quot;</span>
+    <span class="n">batch_request</span> <span class="o">=</span> <span class="n">BatchIntentRequest</span><span class="p">(</span><span class="n">intents</span><span class="o">=</span><span class="n">intents</span><span class="p">)</span>
+    <span class="n">response</span> <span class="o">=</span> <span class="k">await</span> <span class="n">client</span><span class="o">.</span><span class="n">BatchSubmitIntents</span><span class="p">(</span><span class="n">batch_request</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">response</span><span class="o">.</span><span class="n">responses</span>
+
+<span class="c1"># Observation delta batching</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ObservationBatcher</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="n">flush_interval</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flush_interval</span> <span class="o">=</span> <span class="n">flush_interval</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pending_deltas</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_flush</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">add_delta</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">delta</span><span class="p">:</span> <span class="n">ObservationDelta</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pending_deltas</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">delta</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pending_deltas</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="ow">or</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_flush</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">flush_interval</span><span class="p">):</span>
+            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">flush</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending_deltas</span><span class="p">:</span>
+            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">send_batch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pending_deltas</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">pending_deltas</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_flush</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="security-best-practices">
+<h2>Security Best Practices<a class="headerlink" href="#security-best-practices" title="Link to this heading">¶</a></h2>
+<section id="authentication-and-authorization">
+<h3>Authentication and Authorization<a class="headerlink" href="#authentication-and-authorization" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># JWT token validation</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jwt</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">wraps</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">require_auth</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+    <span class="nd">@wraps</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">decorated_function</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;Authorization&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;Bearer &#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">payload</span> <span class="o">=</span> <span class="n">jwt</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">token</span><span class="p">,</span> <span class="n">SECRET_KEY</span><span class="p">,</span> <span class="n">algorithms</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;HS256&#39;</span><span class="p">])</span>
+            <span class="n">request</span><span class="o">.</span><span class="n">user</span> <span class="o">=</span> <span class="n">payload</span>
+        <span class="k">except</span> <span class="n">jwt</span><span class="o">.</span><span class="n">InvalidTokenError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;code&#39;</span><span class="p">:</span> <span class="mi">5001</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;UNAUTHORIZED&#39;</span><span class="p">}},</span> <span class="mi">401</span>
+
+        <span class="k">return</span> <span class="k">await</span> <span class="n">f</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">decorated_function</span>
+
+<span class="c1"># mTLS certificate validation</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_client_certificate</span><span class="p">(</span><span class="n">cert</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate client certificate for adapter authentication.&quot;&quot;&quot;</span>
+    <span class="c1"># Verify certificate chain</span>
+    <span class="c1"># Check certificate subject matches expected adapter</span>
+    <span class="c1"># Validate certificate hasn&#39;t expired</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+</section>
+<section id="input-validation">
+<h3>Input Validation<a class="headerlink" href="#input-validation" title="Link to this heading">¶</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">validator</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">IntentRequest</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span>
+    <span class="n">context_seq</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">req_id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">priority</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">schema_version</span><span class="p">:</span> <span class="nb">str</span>
+
+    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;kind&#39;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_kind</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="n">allowed_kinds</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Speak&#39;</span><span class="p">,</span> <span class="s1">&#39;Move&#39;</span><span class="p">,</span> <span class="s1">&#39;Interact&#39;</span><span class="p">,</span> <span class="s1">&#39;Custom&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed_kinds</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Invalid intent kind: </span><span class="si">{</span><span class="n">v</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;req_id&#39;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_req_id</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;^[a-zA-Z0-9_-]+$&#39;</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Invalid req_id format&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+
+    <span class="nd">@validator</span><span class="p">(</span><span class="s1">&#39;priority&#39;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_priority</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="o">-</span><span class="mi">100</span> <span class="o">&lt;=</span> <span class="n">v</span> <span class="o">&lt;=</span> <span class="mi">100</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Priority must be between -100 and 100&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">v</span>
+</pre></div>
+</div>
+<p>This comprehensive integration guide provides patterns for the most common external system integrations with the Gunn simulation core, emphasizing proper error handling, performance optimization, and security best practices.</p>
+</section>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+
+        <div class="related-pages">
+          <a class="next-page" href="web_adapter.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Web Adapter</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="tech.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+
+                <div class="title">Technology Stack</div>
+
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, gunn contributors
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on 2025-09-28</div>
+          </div>
+          <div class="right-details">
+
+          </div>
+        </div>
+
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+
+
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">External Integration Patterns</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#integration-patterns">Integration Patterns</a><ul>
+<li><a class="reference internal" href="#game-engine-integration-unity-unreal">1. Game Engine Integration (Unity/Unreal)</a><ul>
+<li><a class="reference internal" href="#unity-integration-pattern">Unity Integration Pattern</a></li>
+<li><a class="reference internal" href="#key-unity-integration-points">Key Unity Integration Points</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#web-application-integration">2. Web Application Integration</a><ul>
+<li><a class="reference internal" href="#javascript-typescript-web-client">JavaScript/TypeScript Web Client</a></li>
+<li><a class="reference internal" href="#key-web-integration-points">Key Web Integration Points</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#llm-service-integration">3. LLM Service Integration</a><ul>
+<li><a class="reference internal" href="#python-llm-adapter">Python LLM Adapter</a></li>
+<li><a class="reference internal" href="#key-llm-integration-points">Key LLM Integration Points</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#multi-tenant-saas-integration">4. Multi-Tenant SaaS Integration</a><ul>
+<li><a class="reference internal" href="#multi-tenant-architecture">Multi-Tenant Architecture</a></li>
+<li><a class="reference internal" href="#key-multi-tenant-integration-points">Key Multi-Tenant Integration Points</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#error-handling-patterns">Error Handling Patterns</a><ul>
+<li><a class="reference internal" href="#structured-error-responses">Structured Error Responses</a></li>
+<li><a class="reference internal" href="#circuit-breaker-pattern">Circuit Breaker Pattern</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#performance-considerations">Performance Considerations</a><ul>
+<li><a class="reference internal" href="#connection-pooling">Connection Pooling</a></li>
+<li><a class="reference internal" href="#batch-operations">Batch Operations</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#security-best-practices">Security Best Practices</a><ul>
+<li><a class="reference internal" href="#authentication-and-authorization">Authentication and Authorization</a></li>
+<li><a class="reference internal" href="#input-validation">Input Validation</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+
+
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=2b5c797b"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    <script src="_static/translations.js?v=4755f45a"></script>
+    </body>
+</html>

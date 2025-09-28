@@ -456,7 +456,8 @@ class TestAgentHandleIsolation:
 
         # Submit all intents concurrently
         tasks = [
-            handle.submit_intent(intent) for handle, intent in zip(handles, intents)
+            handle.submit_intent(intent)
+            for handle, intent in zip(handles, intents, strict=False)
         ]
         req_ids = await asyncio.gather(*tasks)
 

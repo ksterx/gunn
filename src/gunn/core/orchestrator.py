@@ -26,9 +26,19 @@ from gunn.utils.memory import MemoryConfig, MemoryManager
 from gunn.utils.scheduling import WeightedRoundRobinScheduler
 from gunn.utils.telemetry import (
     MonotonicClock,
+    async_performance_timer,
+    bandwidth_monitor,
     get_logger,
+    get_tracer,
     record_backpressure_event,
+    record_conflict,
+    record_intent_throughput,
+    record_observation_delivery_latency,
     record_queue_high_watermark,
+    system_monitor,
+    update_active_agents_count,
+    update_global_seq,
+    update_view_seq,
 )
 from gunn.utils.timing import TimedQueue
 
@@ -50,20 +60,641 @@ class EffectValidator(Protocol):
 
 
 class DefaultEffectValidator:
-    """Default implementation of EffectValidator with basic validation."""
+    """Default implementation of EffectValidator with comprehensive validation.
+
+    Provides validation for quota limits, cooldowns, permissions, and world state
+    constraints to ensure intents can be safely executed.
+
+    Requirements addressed:
+    - 1.5: Intent validation through EffectValidator before creating an Effect
+    - 3.4: Validation for quota limits, cooldowns, and permissions
+    - 10.3: Structured error codes for validation failures
+    """
+
+    def __init__(
+        self,
+        max_intents_per_minute: int = 60,
+        max_tokens_per_minute: int = 10000,
+        default_cooldown_seconds: float = 1.0,
+        max_payload_size_bytes: int = 10000,
+        allowed_intent_kinds: set[str] | None = None,
+    ):
+        """Initialize validator with configuration.
+
+        Args:
+            max_intents_per_minute: Maximum intents per agent per minute
+            max_tokens_per_minute: Maximum tokens per agent per minute
+            default_cooldown_seconds: Default cooldown between intents
+            max_payload_size_bytes: Maximum payload size in bytes
+            allowed_intent_kinds: Set of allowed intent kinds (None = allow all)
+        """
+        self.max_intents_per_minute = max_intents_per_minute
+        self.max_tokens_per_minute = max_tokens_per_minute
+        self.default_cooldown_seconds = default_cooldown_seconds
+        self.max_payload_size_bytes = max_payload_size_bytes
+        self.allowed_intent_kinds = allowed_intent_kinds or {
+            "Speak",
+            "Move",
+            "Interact",
+            "Custom",
+        }
+
+        # Tracking state for validation
+        self._agent_intent_history: dict[str, list[float]] = {}
+        self._agent_token_usage: dict[str, list[tuple[float, int]]] = {}
+        self._agent_last_intent_time: dict[str, float] = {}
+        self._agent_permissions: dict[str, set[str]] = {}
+        self._intent_kind_cooldowns: dict[str, float] = {
+            "Speak": 0.5,
+            "Move": 0.1,
+            "Interact": 2.0,
+            "Custom": 1.0,
+        }
+
+    def set_agent_permissions(self, agent_id: str, permissions: set[str]) -> None:
+        """Set permissions for an agent.
+
+        Args:
+            agent_id: Agent identifier
+            permissions: Set of permission strings
+        """
+        self._agent_permissions[agent_id] = permissions.copy()
+
+    def add_agent_permission(self, agent_id: str, permission: str) -> None:
+        """Add a permission for an agent.
+
+        Args:
+            agent_id: Agent identifier
+            permission: Permission string to add
+        """
+        if agent_id not in self._agent_permissions:
+            self._agent_permissions[agent_id] = set()
+        self._agent_permissions[agent_id].add(permission)
+
+    def remove_agent_permission(self, agent_id: str, permission: str) -> None:
+        """Remove a permission for an agent.
+
+        Args:
+            agent_id: Agent identifier
+            permission: Permission string to remove
+        """
+        if agent_id in self._agent_permissions:
+            self._agent_permissions[agent_id].discard(permission)
+
+    def set_intent_kind_cooldown(
+        self, intent_kind: str, cooldown_seconds: float
+    ) -> None:
+        """Set cooldown for a specific intent kind.
+
+        Args:
+            intent_kind: Intent kind to set cooldown for
+            cooldown_seconds: Cooldown duration in seconds
+        """
+        self._intent_kind_cooldowns[intent_kind] = cooldown_seconds
 
     def validate_intent(self, intent: Intent, world_state: WorldState) -> bool:
-        """Basic validation - always returns True for now.
+        """Validate if intent can be executed.
+
+        Performs comprehensive validation including:
+        - Basic structure validation
+        - Permission checks
+        - Quota limit validation
+        - Cooldown enforcement
+        - World state constraint checks
+        - Payload size limits
 
         Args:
             intent: Intent to validate
             world_state: Current world state
 
         Returns:
-            True (basic implementation allows all intents)
+            True if intent is valid and can be executed
+
+        Raises:
+            ValidationError: If validation fails with detailed reasons
         """
-        # TODO: Implement real validation logic in task 6
-        return True
+        validation_failures: list[str] = []
+        current_time = time.time()
+        agent_id = intent.get("agent_id", "")
+        intent_kind = intent.get("kind", "")
+
+        try:
+            # 1. Basic structure validation
+            validation_failures.extend(self._validate_structure(intent))
+
+            # 2. Permission validation
+            validation_failures.extend(self._validate_permissions(intent))
+
+            # 3. Intent kind validation
+            validation_failures.extend(self._validate_intent_kind(intent))
+
+            # 4. Payload size validation
+            validation_failures.extend(self._validate_payload_size(intent))
+
+            # 5. Quota validation
+            validation_failures.extend(
+                self._validate_quota_limits(intent, current_time)
+            )
+
+            # 6. Cooldown validation
+            validation_failures.extend(self._validate_cooldowns(intent, current_time))
+
+            # 7. World state constraint validation
+            validation_failures.extend(
+                self._validate_world_state_constraints(intent, world_state)
+            )
+
+            # If any validation failed, raise ValidationError
+            if validation_failures:
+                from gunn.utils.errors import ValidationError
+
+                raise ValidationError(intent, validation_failures)
+
+            # Record successful validation for quota/cooldown tracking
+            self._record_intent_validation(intent, current_time)
+
+            return True
+
+        except Exception as e:
+            # Re-raise ValidationError as-is, wrap others
+            if isinstance(e, ValidationError):
+                raise
+
+            # Wrap unexpected errors
+            from gunn.utils.errors import ValidationError
+
+            validation_failures.append(f"validation_error: {e!s}")
+            raise ValidationError(intent, validation_failures) from e
+
+    def _validate_structure(self, intent: Intent) -> list[str]:
+        """Validate basic intent structure.
+
+        Args:
+            intent: Intent to validate
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+
+        required_fields = ["agent_id", "kind", "req_id", "schema_version"]
+        for field in required_fields:
+            if not intent.get(field):
+                failures.append(f"missing_required_field: {field}")
+
+        # Validate agent_id format
+        agent_id = intent.get("agent_id", "")
+        if agent_id and (
+            len(agent_id) > 100
+            or not agent_id.replace("_", "").replace("-", "").isalnum()
+        ):
+            failures.append("invalid_agent_id_format")
+
+        # Validate req_id format
+        req_id = intent.get("req_id", "")
+        if req_id and len(req_id) > 200:
+            failures.append("req_id_too_long")
+
+        # Validate priority range
+        priority = intent.get("priority", 0)
+        if not isinstance(priority, int) or priority < -100 or priority > 100:
+            failures.append("invalid_priority_range")
+
+        return failures
+
+    def _validate_permissions(self, intent: Intent) -> list[str]:
+        """Validate agent permissions for this intent.
+
+        Args:
+            intent: Intent to validate
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+        agent_id = intent.get("agent_id", "")
+        intent_kind = intent.get("kind", "")
+
+        # Get agent permissions
+        agent_permissions = self._agent_permissions.get(agent_id, set())
+
+        # Check basic submit_intent permission
+        if "submit_intent" not in agent_permissions:
+            failures.append("missing_permission: submit_intent")
+
+        # Check intent-kind-specific permissions
+        kind_permission_map = {
+            "Speak": "intent:speak",
+            "Move": "intent:move",
+            "Interact": "intent:interact",
+            "Custom": "intent:custom",
+        }
+
+        required_permission = kind_permission_map.get(intent_kind)
+        if required_permission and required_permission not in agent_permissions:
+            failures.append(f"missing_permission: {required_permission}")
+
+        return failures
+
+    def _validate_intent_kind(self, intent: Intent) -> list[str]:
+        """Validate intent kind is allowed.
+
+        Args:
+            intent: Intent to validate
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+        intent_kind = intent.get("kind", "")
+
+        if intent_kind not in self.allowed_intent_kinds:
+            allowed_kinds = ", ".join(sorted(self.allowed_intent_kinds))
+            failures.append(
+                f"invalid_intent_kind: {intent_kind} (allowed: {allowed_kinds})"
+            )
+
+        return failures
+
+    def _validate_payload_size(self, intent: Intent) -> list[str]:
+        """Validate payload size limits.
+
+        Args:
+            intent: Intent to validate
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+        payload = intent.get("payload", {})
+
+        # Estimate payload size (rough JSON serialization size)
+        import json
+
+        try:
+            payload_size = len(json.dumps(payload, separators=(",", ":")))
+            if payload_size > self.max_payload_size_bytes:
+                failures.append(
+                    f"payload_too_large: {payload_size} > {self.max_payload_size_bytes} bytes"
+                )
+        except (TypeError, ValueError):
+            failures.append("payload_not_serializable")
+
+        return failures
+
+    def _validate_quota_limits(self, intent: Intent, current_time: float) -> list[str]:
+        """Validate quota limits for the agent.
+
+        Args:
+            intent: Intent to validate
+            current_time: Current timestamp
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+        agent_id = intent.get("agent_id", "")
+
+        # Initialize tracking if needed
+        if agent_id not in self._agent_intent_history:
+            self._agent_intent_history[agent_id] = []
+        if agent_id not in self._agent_token_usage:
+            self._agent_token_usage[agent_id] = []
+
+        # Clean up old entries (older than 1 minute)
+        cutoff_time = current_time - 60.0
+        self._agent_intent_history[agent_id] = [
+            t for t in self._agent_intent_history[agent_id] if t > cutoff_time
+        ]
+        self._agent_token_usage[agent_id] = [
+            (t, tokens)
+            for t, tokens in self._agent_token_usage[agent_id]
+            if t > cutoff_time
+        ]
+
+        # Check intent quota
+        intent_count = len(self._agent_intent_history[agent_id])
+        if intent_count >= self.max_intents_per_minute:
+            failures.append(
+                f"intent_quota_exceeded: {intent_count} >= {self.max_intents_per_minute}"
+            )
+
+        # Check token quota (estimate tokens from payload)
+        payload = intent.get("payload", {})
+        estimated_tokens = self._estimate_token_usage(payload)
+        current_token_usage = sum(
+            tokens for _, tokens in self._agent_token_usage[agent_id]
+        )
+
+        if current_token_usage + estimated_tokens > self.max_tokens_per_minute:
+            failures.append(
+                f"token_quota_exceeded: {current_token_usage + estimated_tokens} > {self.max_tokens_per_minute}"
+            )
+
+        return failures
+
+    def _validate_cooldowns(self, intent: Intent, current_time: float) -> list[str]:
+        """Validate cooldown constraints.
+
+        Args:
+            intent: Intent to validate
+            current_time: Current timestamp
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+        agent_id = intent.get("agent_id", "")
+        intent_kind = intent.get("kind", "")
+
+        # Check last intent time for this agent
+        last_intent_time = self._agent_last_intent_time.get(agent_id, 0.0)
+
+        # Get cooldown for this intent kind
+        cooldown = self._intent_kind_cooldowns.get(
+            intent_kind, self.default_cooldown_seconds
+        )
+
+        time_since_last = current_time - last_intent_time
+        if time_since_last < cooldown:
+            remaining_cooldown = cooldown - time_since_last
+            failures.append(
+                f"cooldown_active: {remaining_cooldown:.2f}s remaining for {intent_kind}"
+            )
+
+        return failures
+
+    def _validate_world_state_constraints(
+        self, intent: Intent, world_state: WorldState
+    ) -> list[str]:
+        """Validate world state constraints for the intent.
+
+        Args:
+            intent: Intent to validate
+            world_state: Current world state
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+        agent_id = intent.get("agent_id", "")
+        intent_kind = intent.get("kind", "")
+        payload = intent.get("payload", {})
+
+        # Check if agent exists in world state
+        if agent_id not in world_state.entities:
+            failures.append(f"agent_not_in_world: {agent_id}")
+            return failures  # Can't validate further without agent entity
+
+        agent_entity = world_state.entities[agent_id]
+
+        # Validate based on intent kind
+        if intent_kind == "Move":
+            failures.extend(
+                self._validate_move_constraints(agent_id, payload, world_state)
+            )
+        elif intent_kind == "Interact":
+            failures.extend(
+                self._validate_interact_constraints(agent_id, payload, world_state)
+            )
+        elif intent_kind == "Speak":
+            failures.extend(
+                self._validate_speak_constraints(agent_id, payload, world_state)
+            )
+
+        return failures
+
+    def _validate_move_constraints(
+        self, agent_id: str, payload: dict, world_state: WorldState
+    ) -> list[str]:
+        """Validate movement constraints.
+
+        Args:
+            agent_id: Agent attempting to move
+            payload: Move intent payload
+            world_state: Current world state
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+
+        # Check if agent has position
+        if agent_id not in world_state.spatial_index:
+            failures.append("agent_has_no_position")
+            return failures
+
+        current_pos = world_state.spatial_index[agent_id]
+
+        # Validate target position format
+        target = payload.get("to")
+        if not target or not isinstance(target, list | tuple) or len(target) != 3:
+            failures.append("invalid_target_position_format")
+            return failures
+
+        try:
+            target_pos = tuple(float(x) for x in target)
+        except (ValueError, TypeError):
+            failures.append("invalid_target_position_values")
+            return failures
+
+        # Check movement distance (simple constraint)
+        distance = (
+            sum((a - b) ** 2 for a, b in zip(current_pos, target_pos, strict=False))
+            ** 0.5
+        )
+        max_move_distance = 100.0  # Configurable constraint
+
+        if distance > max_move_distance:
+            failures.append(
+                f"move_distance_too_large: {distance:.2f} > {max_move_distance}"
+            )
+
+        # Check for collision with other entities (simplified)
+        for entity_id, entity_pos in world_state.spatial_index.items():
+            if entity_id == agent_id:
+                continue
+
+            entity_distance = (
+                sum((a - b) ** 2 for a, b in zip(target_pos, entity_pos, strict=False))
+                ** 0.5
+            )
+            min_distance = 1.0  # Minimum distance between entities
+
+            if entity_distance < min_distance:
+                failures.append(f"target_position_occupied: too close to {entity_id}")
+                break
+
+        return failures
+
+    def _validate_interact_constraints(
+        self, agent_id: str, payload: dict, world_state: WorldState
+    ) -> list[str]:
+        """Validate interaction constraints.
+
+        Args:
+            agent_id: Agent attempting to interact
+            payload: Interact intent payload
+            world_state: Current world state
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+
+        target_id = payload.get("target")
+        if not target_id:
+            failures.append("missing_interaction_target")
+            return failures
+
+        # Check if target exists
+        if target_id not in world_state.entities:
+            failures.append(f"interaction_target_not_found: {target_id}")
+            return failures
+
+        # Check if agent and target are close enough (if both have positions)
+        if (
+            agent_id in world_state.spatial_index
+            and target_id in world_state.spatial_index
+        ):
+            agent_pos = world_state.spatial_index[agent_id]
+            target_pos = world_state.spatial_index[target_id]
+
+            distance = (
+                sum((a - b) ** 2 for a, b in zip(agent_pos, target_pos, strict=False))
+                ** 0.5
+            )
+            max_interact_distance = 5.0  # Configurable constraint
+
+            if distance > max_interact_distance:
+                failures.append(
+                    f"interaction_target_too_far: {distance:.2f} > {max_interact_distance}"
+                )
+
+        # Check interaction type constraints
+        interaction_type = payload.get("type", "")
+        if interaction_type and interaction_type not in [
+            "examine",
+            "use",
+            "talk",
+            "trade",
+        ]:
+            failures.append(f"invalid_interaction_type: {interaction_type}")
+
+        return failures
+
+    def _validate_speak_constraints(
+        self, agent_id: str, payload: dict, world_state: WorldState
+    ) -> list[str]:
+        """Validate speaking constraints.
+
+        Args:
+            agent_id: Agent attempting to speak
+            payload: Speak intent payload
+            world_state: Current world state
+
+        Returns:
+            List of validation failure messages
+        """
+        failures = []
+
+        message = payload.get("message")
+        if message is None or not isinstance(message, str) or not message.strip():
+            failures.append("missing_or_invalid_message")
+            return failures
+
+        # Check message length
+        max_message_length = 1000  # Configurable constraint
+        if len(message) > max_message_length:
+            failures.append(f"message_too_long: {len(message)} > {max_message_length}")
+
+        # Check for prohibited content (simplified)
+        prohibited_words = ["spam", "abuse"]  # Configurable list
+        message_lower = message.lower()
+        for word in prohibited_words:
+            if word in message_lower:
+                failures.append(f"prohibited_content: {word}")
+
+        return failures
+
+    def _estimate_token_usage(self, payload: dict) -> int:
+        """Estimate token usage for a payload.
+
+        Args:
+            payload: Intent payload
+
+        Returns:
+            Estimated token count
+        """
+        # Simple estimation: 1 token per 4 characters
+        import json
+
+        try:
+            payload_str = json.dumps(payload, separators=(",", ":"))
+            return max(1, len(payload_str) // 4)
+        except (TypeError, ValueError):
+            return 10  # Default estimate for non-serializable payloads
+
+    def _record_intent_validation(self, intent: Intent, current_time: float) -> None:
+        """Record successful intent validation for tracking.
+
+        Args:
+            intent: Validated intent
+            current_time: Current timestamp
+        """
+        agent_id = intent.get("agent_id", "")
+        payload = intent.get("payload", {})
+
+        # Record intent timestamp
+        if agent_id not in self._agent_intent_history:
+            self._agent_intent_history[agent_id] = []
+        self._agent_intent_history[agent_id].append(current_time)
+
+        # Record token usage
+        estimated_tokens = self._estimate_token_usage(payload)
+        if agent_id not in self._agent_token_usage:
+            self._agent_token_usage[agent_id] = []
+        self._agent_token_usage[agent_id].append((current_time, estimated_tokens))
+
+        # Update last intent time
+        self._agent_last_intent_time[agent_id] = current_time
+
+    def get_agent_quota_status(self, agent_id: str) -> dict[str, Any]:
+        """Get current quota status for an agent.
+
+        Args:
+            agent_id: Agent identifier
+
+        Returns:
+            Dictionary with quota status information
+        """
+        current_time = time.time()
+        cutoff_time = current_time - 60.0
+
+        # Clean up old entries
+        intent_history = self._agent_intent_history.get(agent_id, [])
+        intent_history = [t for t in intent_history if t > cutoff_time]
+
+        token_usage = self._agent_token_usage.get(agent_id, [])
+        token_usage = [(t, tokens) for t, tokens in token_usage if t > cutoff_time]
+
+        current_tokens = sum(tokens for _, tokens in token_usage)
+        last_intent_time = self._agent_last_intent_time.get(agent_id, 0.0)
+
+        return {
+            "agent_id": agent_id,
+            "intents_used": len(intent_history),
+            "intents_limit": self.max_intents_per_minute,
+            "intents_remaining": max(
+                0, self.max_intents_per_minute - len(intent_history)
+            ),
+            "tokens_used": current_tokens,
+            "tokens_limit": self.max_tokens_per_minute,
+            "tokens_remaining": max(0, self.max_tokens_per_minute - current_tokens),
+            "last_intent_time": last_intent_time,
+            "time_since_last_intent": current_time - last_intent_time,
+            "permissions": list(self._agent_permissions.get(agent_id, set())),
+        }
 
 
 class AgentHandle:
@@ -96,16 +727,26 @@ class AgentHandle:
         if self.agent_id not in self.orchestrator._per_agent_queues:
             raise RuntimeError(f"Agent {self.agent_id} is not registered")
 
-        timed_queue = self.orchestrator._per_agent_queues[self.agent_id]
-        delta = await timed_queue.get()
+        async with async_performance_timer(
+            "next_observation",
+            agent_id=self.agent_id,
+            view_seq=self.view_seq,
+            logger=self.orchestrator._logger,
+            tracer_name="gunn.agent_handle",
+        ):
+            timed_queue = self.orchestrator._per_agent_queues[self.agent_id]
+            delta = await timed_queue.get()
 
-        # Update view sequence from delta
-        if hasattr(delta, "view_seq"):
-            self.view_seq = delta.view_seq
-        elif isinstance(delta, dict) and "view_seq" in delta:
-            self.view_seq = delta["view_seq"]
+            # Update view sequence from delta
+            if hasattr(delta, "view_seq"):
+                self.view_seq = delta.view_seq
+            elif isinstance(delta, dict) and "view_seq" in delta:
+                self.view_seq = delta["view_seq"]
 
-        return delta
+            # Update view sequence metric
+            update_view_seq(self.agent_id, self.view_seq)
+
+            return delta
 
     async def submit_intent(self, intent: Intent) -> str:
         """Submit intent for validation and processing.
@@ -323,8 +964,12 @@ class Orchestrator:
         )
         self.memory_manager = MemoryManager(memory_config)
 
-        # Logging
+        # Logging and telemetry
         self._logger = get_logger("gunn.orchestrator", world_id=world_id)
+        self._tracer = get_tracer("gunn.orchestrator")
+
+        # Start system monitoring
+        self._start_system_monitoring()
 
         self._logger.info(
             "Orchestrator initialized",
@@ -414,6 +1059,9 @@ class Orchestrator:
         # Create timed queue for this agent
         self._per_agent_queues[agent_id] = TimedQueue()
 
+        # Update active agents count metric
+        update_active_agents_count(len(self.agent_handles))
+
         self._logger.info(
             "Agent registered",
             agent_id=agent_id,
@@ -472,61 +1120,55 @@ class Orchestrator:
         - 6.4: ObservationDelta delivery latency ≤ 20ms
         - 6.5: Timed delivery using per-agent TimedQueues with latency models
         """
-        start_time = time.perf_counter()
+        # Enhanced telemetry for broadcast_event
+        async with async_performance_timer(
+            "broadcast_event",
+            agent_id=draft.get("source_id"),
+            global_seq=self._global_seq + 1,
+            logger=self._logger,
+            tracer_name="gunn.orchestrator",
+        ):
+            # Validate draft
+            if not draft.get("kind"):
+                raise ValueError("EffectDraft must have 'kind' field")
+            if not draft.get("source_id"):
+                raise ValueError("EffectDraft must have 'source_id' field")
+            if not draft.get("schema_version"):
+                raise ValueError("EffectDraft must have 'schema_version' field")
 
-        # Validate draft
-        if not draft.get("kind"):
-            raise ValueError("EffectDraft must have 'kind' field")
-        if not draft.get("source_id"):
-            raise ValueError("EffectDraft must have 'source_id' field")
-        if not draft.get("schema_version"):
-            raise ValueError("EffectDraft must have 'schema_version' field")
+            # Priority completion: use config.default_priority if not specified
+            payload = draft.get("payload", {})
+            if "priority" not in payload:
+                payload = payload.copy()
+                payload["priority"] = self.config.default_priority
 
-        # Priority completion: use config.default_priority if not specified
-        payload = draft.get("payload", {})
-        if "priority" not in payload:
-            payload = payload.copy()
-            payload["priority"] = self.config.default_priority
+            # Create complete effect with orchestrator-managed fields
+            effect: Effect = {
+                "uuid": uuid.uuid4().hex,
+                "kind": draft["kind"],
+                "payload": payload,
+                "source_id": draft["source_id"],
+                "schema_version": draft["schema_version"],
+                "sim_time": self._current_sim_time(),
+                "global_seq": self._next_seq(),
+            }
 
-        # Create complete effect with orchestrator-managed fields
-        effect: Effect = {
-            "uuid": uuid.uuid4().hex,
-            "kind": draft["kind"],
-            "payload": payload,
-            "source_id": draft["source_id"],
-            "schema_version": draft["schema_version"],
-            "sim_time": self._current_sim_time(),
-            "global_seq": self._next_seq(),
-        }
+            # Append to event log with world_id in source_metadata
+            await self.event_log.append(effect, req_id=None)
 
-        # Append to event log with world_id in source_metadata
-        await self.event_log.append(effect, req_id=None)
+            # Update world state based on effect
+            await self._apply_effect_to_world_state(effect)
 
-        # Update world state based on effect
-        await self._apply_effect_to_world_state(effect)
+            # Check if snapshot should be created and create it if needed
+            await self.memory_manager.check_and_create_snapshot(
+                effect["global_seq"], self.world_state, effect["sim_time"]
+            )
 
-        # Check if snapshot should be created and create it if needed
-        await self.memory_manager.check_and_create_snapshot(
-            effect["global_seq"], self.world_state, effect["sim_time"]
-        )
+            # Check memory limits and trigger compaction if needed
+            await self.memory_manager.check_memory_limits(self.event_log)
 
-        # Check memory limits and trigger compaction if needed
-        await self.memory_manager.check_memory_limits(self.event_log)
-
-        # Generate and distribute observations to affected agents
-        await self._distribute_observations(effect)
-
-        processing_time_ms = (time.perf_counter() - start_time) * 1000
-
-        self._logger.info(
-            "Event broadcast complete",
-            effect_kind=effect["kind"],
-            effect_uuid=effect["uuid"],
-            global_seq=effect["global_seq"],
-            sim_time=effect["sim_time"],
-            source_id=effect["source_id"],
-            processing_time_ms=processing_time_ms,
-        )
+            # Generate and distribute observations to affected agents
+            await self._distribute_observations(effect)
 
     async def submit_intent(self, intent: Intent) -> str:
         """Two-phase commit: idempotency → quota → backpressure → priority → fairness → validator → commit.
@@ -558,76 +1200,95 @@ class Orchestrator:
         agent_id = intent["agent_id"]
         context_seq = intent.get("context_seq", 0)
 
-        start_time = time.perf_counter()
+        # Enhanced telemetry for submit_intent
+        async with async_performance_timer(
+            "submit_intent",
+            agent_id=agent_id,
+            req_id=req_id,
+            global_seq=self._global_seq,
+            view_seq=context_seq,
+            logger=self._logger,
+            tracer_name="gunn.orchestrator",
+        ):
+            try:
+                # Phase 1: Idempotency check using persistent store
+                existing_seq = await self._dedup_store.check_and_record(
+                    self.world_id, agent_id, req_id, self._global_seq + 1
+                )
+                if existing_seq is not None:
+                    self._logger.info(
+                        "Intent already processed (idempotent)",
+                        req_id=req_id,
+                        agent_id=agent_id,
+                        existing_seq=existing_seq,
+                    )
+                    return req_id
 
-        try:
-            # Phase 1: Idempotency check using persistent store
-            existing_seq = await self._dedup_store.check_and_record(
-                self.world_id, agent_id, req_id, self._global_seq + 1
-            )
-            if existing_seq is not None:
+                # Phase 2: Agent validation
+                if agent_id not in self.agent_handles:
+                    raise ValueError(f"Agent {agent_id} is not registered")
+
+                # Phase 3: Staleness detection
+                _ = self.agent_handles[agent_id]
+                staleness = self._global_seq - context_seq
+                if staleness > self.config.staleness_threshold:
+                    # Record staleness conflict
+                    record_conflict(agent_id, "staleness")
+                    raise StaleContextError(
+                        req_id,
+                        context_seq,
+                        self._global_seq,
+                        self.config.staleness_threshold,
+                    )
+
+                # Phase 4: Quota checking
+                await self._check_quota(agent_id, intent)
+
+                # Phase 5: Backpressure checking
+                await self._check_backpressure(agent_id)
+
+                # Phase 6: Priority assignment and fairness scheduling
+                priority = intent.get("priority", self.config.default_priority)
+                # Normalize priority to 0-2 range (0=high, 1=normal, 2=low)
+                normalized_priority = max(0, min(2, 2 - priority // 10))
+
+                # Enqueue for fair processing
+                self._scheduler.enqueue(intent, normalized_priority)
+
                 self._logger.info(
-                    "Intent already processed (idempotent)",
+                    "Intent enqueued for processing",
                     req_id=req_id,
                     agent_id=agent_id,
-                    existing_seq=existing_seq,
+                    priority=priority,
+                    normalized_priority=normalized_priority,
+                    queue_depth=self._scheduler.get_queue_depth(agent_id),
                 )
+
+                self._start_processing_loop()
+
+                # Record successful intent throughput
+                record_intent_throughput(agent_id, intent["kind"], "success")
+
                 return req_id
 
-            # Phase 2: Agent validation
-            if agent_id not in self.agent_handles:
-                raise ValueError(f"Agent {agent_id} is not registered")
-
-            # Phase 3: Staleness detection
-            _ = self.agent_handles[agent_id]
-            staleness = self._global_seq - context_seq
-            if staleness > self.config.staleness_threshold:
-                raise StaleContextError(
-                    req_id,
-                    context_seq,
-                    self._global_seq,
-                    self.config.staleness_threshold,
-                )
-
-            # Phase 4: Quota checking
-            await self._check_quota(agent_id, intent)
-
-            # Phase 5: Backpressure checking
-            await self._check_backpressure(agent_id)
-
-            # Phase 6: Priority assignment and fairness scheduling
-            priority = intent.get("priority", self.config.default_priority)
-            # Normalize priority to 0-2 range (0=high, 1=normal, 2=low)
-            normalized_priority = max(0, min(2, 2 - priority // 10))
-
-            # Enqueue for fair processing
-            self._scheduler.enqueue(intent, normalized_priority)
-
-            self._logger.info(
-                "Intent enqueued for processing",
-                req_id=req_id,
-                agent_id=agent_id,
-                priority=priority,
-                normalized_priority=normalized_priority,
-                queue_depth=self._scheduler.get_queue_depth(agent_id),
-                processing_time_ms=(time.perf_counter() - start_time) * 1000,
-            )
-
-            self._start_processing_loop()
-
-            return req_id
-
-        except Exception as e:
-            processing_time_ms = (time.perf_counter() - start_time) * 1000
-            self._logger.error(
-                "Intent submission failed",
-                req_id=req_id,
-                agent_id=agent_id,
-                error=str(e),
-                error_type=type(e).__name__,
-                processing_time_ms=processing_time_ms,
-            )
-            raise
+            except StaleContextError:
+                record_intent_throughput(agent_id, intent["kind"], "stale")
+                raise
+            except QuotaExceededError:
+                record_intent_throughput(agent_id, intent["kind"], "quota_exceeded")
+                record_conflict(agent_id, "quota")
+                raise
+            except BackpressureError:
+                record_intent_throughput(agent_id, intent["kind"], "backpressure")
+                record_conflict(agent_id, "backpressure")
+                raise
+            except ValidationError:
+                record_intent_throughput(agent_id, intent["kind"], "validation_failed")
+                record_conflict(agent_id, "validation")
+                raise
+            except Exception:
+                record_intent_throughput(agent_id, intent["kind"], "error")
+                raise
 
     async def _check_quota(self, agent_id: str, intent: Intent) -> None:
         """Check if agent has quota available for this intent.
@@ -1010,6 +1671,10 @@ class Orchestrator:
             Next monotonically increasing sequence number
         """
         self._global_seq += 1
+
+        # Update global sequence metric
+        update_global_seq(self._global_seq)
+
         return self._global_seq
 
     def _current_sim_time(self) -> float:
@@ -1416,6 +2081,18 @@ class Orchestrator:
                 await agent_queue.put_at(deliver_at, observation_delta)
                 agents_notified += 1
 
+                # Record observation delivery latency and bandwidth
+                record_observation_delivery_latency(agent_id, delivery_delay)
+
+                # Calculate patch size for bandwidth monitoring
+                import orjson
+
+                patch_size = len(orjson.dumps(observation_delta))
+                patch_count = len(observation_delta.get("patches", []))
+                bandwidth_monitor.record_patch_bandwidth(
+                    agent_id, patch_size, patch_count, False
+                )
+
                 self._logger.debug(
                     "Observation scheduled for delivery",
                     agent_id=agent_id,
@@ -1687,3 +2364,28 @@ class Orchestrator:
         self._initialized = False
         self._initialize_lock = None
         self._logger.info("Orchestrator shutdown complete")
+
+    def _start_system_monitoring(self) -> None:
+        """Start background system monitoring task."""
+
+        async def monitor_system():
+            while not self._shutdown_event.is_set():
+                try:
+                    # Record system metrics
+                    system_monitor.record_memory_usage("orchestrator")
+                    system_monitor.record_cpu_usage("orchestrator")
+
+                    # Record queue depths
+                    for agent_id, queue in self._per_agent_queues.items():
+                        queue_depth = queue.qsize() if hasattr(queue, "qsize") else 0
+                        record_queue_depth(agent_id, queue_depth)
+
+                    # Wait before next monitoring cycle
+                    await asyncio.sleep(30.0)  # Monitor every 30 seconds
+
+                except Exception as e:
+                    self._logger.warning("System monitoring error", error=str(e))
+                    await asyncio.sleep(60.0)  # Back off on error
+
+        # Start monitoring task
+        asyncio.create_task(monitor_system())

@@ -1,0 +1,75 @@
+{
+  "summary": {
+    "total_duration": 0.6930731250031386,
+    "total_suites": 5,
+    "passed_suites": 0,
+    "suite_pass_rate": 0.0,
+    "total_tests": 5,
+    "passed_tests": 0,
+    "test_pass_rate": 0.0,
+    "overall_success": false
+  },
+  "suite_results": {
+    "Multi-Agent Conversation with Interruption": {
+      "passed": false,
+      "exit_code": 1,
+      "duration": 0.18363254200085066,
+      "tests_run": 1,
+      "tests_passed": 0
+    },
+    "SLO Validation": {
+      "passed": false,
+      "exit_code": 1,
+      "duration": 0.09954875000403263,
+      "tests_run": 1,
+      "tests_passed": 0
+    },
+    "Replay Consistency and Golden Traces": {
+      "passed": false,
+      "exit_code": 1,
+      "duration": 0.16110612500051502,
+      "tests_run": 1,
+      "tests_passed": 0
+    },
+    "Fault Tolerance": {
+      "passed": false,
+      "exit_code": 1,
+      "duration": 0.13568491699697915,
+      "tests_run": 1,
+      "tests_passed": 0
+    },
+    "End-to-End Workflows": {
+      "passed": false,
+      "exit_code": 1,
+      "duration": 0.11300833300629165,
+      "tests_run": 1,
+      "tests_passed": 0
+    }
+  },
+  "requirements_coverage": {
+    "11.1": "Observation delivery latency \u226420ms - Covered by SLO Validation",
+    "11.2": "Cancellation latency \u2264100ms - Covered by SLO Validation and Conversation Interruption",
+    "11.3": "Intent throughput \u2265100/sec - Covered by SLO Validation",
+    "11.4": "Non-blocking operations - Covered by SLO Validation and End-to-End Workflows",
+    "7.4": "Replay consistency - Covered by Replay Consistency and Golden Traces",
+    "9.4": "Determinism validation - Covered by Replay Consistency and Golden Traces"
+  },
+  "test_categories": {
+    "Multi-agent conversation with interruption scenarios": "\u2705 Implemented",
+    "Performance tests validating SLOs": "\u2705 Implemented",
+    "Replay consistency tests": "\u2705 Implemented",
+    "Determinism golden trace tests": "\u2705 Implemented",
+    "Fault tolerance tests": "\u2705 Implemented",
+    "CI performance job": "\u2705 Implemented",
+    "End-to-end workflow tests": "\u2705 Implemented"
+  },
+  "task_20_compliance": {
+    "multi_agent_conversation_interruption": false,
+    "slo_validation_tests": true,
+    "replay_consistency_tests": true,
+    "golden_trace_tests": true,
+    "fault_tolerance_tests": true,
+    "ci_performance_job": true,
+    "end_to_end_workflow_tests": true
+  }
+}
