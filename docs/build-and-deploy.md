@@ -36,9 +36,13 @@ make linkcheck
 
 ## GitHub Pages へのデプロイ
 
-1. GitHub リポジトリ設定の「Pages」でソースを `main` ブランチの `/docs/_build/html` に指定します。
-2. CI から公開する場合は、ジョブ内で `uv sync --group docs` → `uv run sphinx-build -b html docs docs/_build/html` を実行し、成果物をコミットまたは Pages アーティファクトとしてアップロードします。
-3. Pages は `.nojekyll` を自動生成するため、追加設定は不要です。テーマやメタ情報は `docs/conf.py` で調整できます。
+リポジトリには `Publish Docs` ワークフロー（`.github/workflows/docs-pages.yml`）を追加しています。`main` ブランチへの push ごとに Sphinx をビルドし、生成物を GitHub Pages（`gh-pages` ブランチ）へ反映します。
+
+1. 初回のみ GitHub の **Settings → Pages** でソースを「GitHub Actions」に変更してください。
+2. ワークフローでは `uv sync --group docs` → `uv run sphinx-apidoc` → `uv run sphinx-build -b html` を順に実行し、`docs/_build/html` をアーティファクト化して Pages にデプロイします。
+3. Pages には `.nojekyll` を自動生成してアップロードするため、静的アセット（`_static` など）も確実に配信されます。追加設定は不要です。
+
+手動で公開フローを検証したい場合は、同じコマンド列をローカルで実行し、`docs/_build/html` の内容をそのまま配信対象にすれば GitHub Pages と一致します。
 
 ## API リファレンスを更新する際のヒント
 
