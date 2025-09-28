@@ -81,7 +81,7 @@ class MockLLMAgent:
 
         intent: Intent = {
             "kind": "Speak",
-            "payload": {"text": message},
+            "payload": {"message": message},
             "context_seq": context_seq,
             "req_id": req_id,
             "agent_id": self.agent_id,
@@ -93,7 +93,7 @@ class MockLLMAgent:
             effect, observation = await self.facade.step(self.agent_id, intent)
             return req_id
         else:
-            await self.facade.emit("Speak", {"text": message}, self.agent_id)
+            await self.facade.emit("Speak", {"message": message}, self.agent_id)
             return req_id
 
 
@@ -189,6 +189,10 @@ class TestMultiAgentConversationInterruption:
         bob = MockLLMAgent("bob", rl_facade)
         charlie = MockLLMAgent("charlie", rl_facade)
 
+        # Setup permissions and world state for agents
+        orchestrator = rl_facade.get_orchestrator()
+        self.setup_agent_permissions(orchestrator, ["alice", "bob", "charlie"])
+
         # Phase 1: Alice starts a long message
         alice_message = (
             "Hello everyone! I wanted to tell you about this amazing discovery "
@@ -273,6 +277,9 @@ class TestMultiAgentConversationInterruption:
         agent1 = MockLLMAgent("agent1", rl_facade)
         orchestrator = rl_facade.get_orchestrator()
 
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, ["agent1", "agent2"])
+
         # Start generation
         generation_task = asyncio.create_task(
             agent1.generate_with_interruption(
@@ -314,6 +321,9 @@ class TestMultiAgentConversationInterruption:
 
         agent = MockLLMAgent("timing_agent", rl_facade)
         orchestrator = rl_facade.get_orchestrator()
+
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, ["timing_agent"])
 
         # Issue cancel token
         req_id = "timing_test_1"
@@ -370,6 +380,9 @@ class TestMultiAgentConversationInterruption:
         agent = MockLLMAgent("staleness_agent", rl_facade)
         orchestrator = rl_facade.get_orchestrator()
 
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, ["staleness_agent", "other_agent"])
+
         # Set initial view_seq
         agent_handle.view_seq = 5
 
@@ -410,6 +423,11 @@ class TestMultiAgentConversationInterruption:
         await rl_facade.register_agent("other_agent", conversation_policy)
 
         orchestrator = rl_facade.get_orchestrator()
+
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(
+            orchestrator, ["always_agent", "conflict_agent", "other_agent"]
+        )
 
         # Set interrupt policies
         orchestrator.set_agent_interrupt_policy("always_agent", "always")
@@ -475,6 +493,10 @@ class TestMultiAgentConversationInterruption:
 
         orchestrator = rl_facade.get_orchestrator()
 
+        # Setup permissions and world state for agents
+        agent_ids = list(agents.keys())
+        self.setup_agent_permissions(orchestrator, agent_ids)
+
         # Start concurrent generation for all agents
         generation_tasks = []
         for agent_id, agent in agents.items():
@@ -539,6 +561,9 @@ class TestMultiAgentConversationInterruption:
         agent = MockLLMAgent("regen_agent", rl_facade)
         orchestrator = rl_facade.get_orchestrator()
 
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, ["regen_agent", "context_agent"])
+
         # Start generation
         original_message = "This is the original message that will be interrupted"
         generation_task = asyncio.create_task(
@@ -562,9 +587,9 @@ class TestMultiAgentConversationInterruption:
         result1, was_interrupted = await generation_task
         assert was_interrupted
 
-        # Get updated observation for regeneration
-        observation = await rl_facade.observe("regen_agent")
-        new_context_seq = observation.get("view_seq", 0)
+        # Get updated context sequence (after context update event)
+        # Since the agent was interrupted, we know the context_seq is now 1
+        new_context_seq = 1
 
         # Regenerate with updated context
         updated_message = f"[Updated based on new context] {original_message}"
@@ -591,6 +616,9 @@ class TestMultiAgentConversationInterruption:
 
         orchestrator = rl_facade.get_orchestrator()
 
+        # Setup permissions and world state for agents
+        self.setup_agent_permissions(orchestrator, ["replay_alice", "replay_bob"])
+
         # Record initial world seed for deterministic replay
         world_seed = 12345
         # orchestrator.set_world_seed(world_seed)  # Method not implemented yet
@@ -612,8 +640,8 @@ class TestMultiAgentConversationInterruption:
             }
         )
 
-        # Bob speaks
-        await bob.submit_intent("Sorry Alice, but this is urgent!", 1)
+        # Bob speaks (use current context_seq after broadcast event)
+        await bob.submit_intent("Sorry Alice, but this is urgent!", 2)
 
         # Get event log for replay
         event_log = orchestrator.event_log

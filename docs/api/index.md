@@ -9,6 +9,7 @@
 orchestrator
 facades
 adapters
+gunn
 ```
 
 ## 自動生成のワークフロー

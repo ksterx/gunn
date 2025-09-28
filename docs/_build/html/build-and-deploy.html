@@ -209,6 +209,23 @@
 <li class="toctree-l2"><a class="reference internal" href="api/orchestrator.html">Orchestrator API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/facades.html">Facades API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/adapters.html">Adapters API</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="api/gunn.html">gunn package</a><input aria-label="Toggle navigation of gunn package" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="api/gunn.adapters.html">gunn.adapters package</a><input aria-label="Toggle navigation of gunn.adapters package" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/gunn.adapters.llm.html">gunn.adapters.llm package</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/gunn.adapters.unity.html">gunn.adapters.unity package</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/gunn.adapters.web.html">gunn.adapters.web package</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.cli.html">gunn.cli package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.config.html">gunn.config package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.core.html">gunn.core package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.facades.html">gunn.facades package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.policies.html">gunn.policies package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.schemas.html">gunn.schemas package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.storage.html">gunn.storage package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.utils.html">gunn.utils package</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -281,11 +298,13 @@ make<span class="w"> </span>linkcheck
 </section>
 <section id="github-pages">
 <h2>GitHub Pages へのデプロイ<a class="headerlink" href="#github-pages" title="Link to this heading">¶</a></h2>
+<p>リポジトリには <code class="docutils literal notranslate"><span class="pre">Publish</span> <span class="pre">Docs</span></code> ワークフロー（<code class="docutils literal notranslate"><span class="pre">.github/workflows/docs-pages.yml</span></code>）を追加しています。<code class="docutils literal notranslate"><span class="pre">main</span></code> ブランチへの push ごとに Sphinx をビルドし、生成物を GitHub Pages（<code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> ブランチ）へ反映します。</p>
 <ol class="arabic simple">
-<li><p>GitHub リポジトリ設定の「Pages」でソースを <code class="docutils literal notranslate"><span class="pre">main</span></code> ブランチの <code class="docutils literal notranslate"><span class="pre">/docs/_build/html</span></code> に指定します。</p></li>
-<li><p>CI から公開する場合は、ジョブ内で <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span> <span class="pre">--group</span> <span class="pre">docs</span></code> → <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">sphinx-build</span> <span class="pre">-b</span> <span class="pre">html</span> <span class="pre">docs</span> <span class="pre">docs/_build/html</span></code> を実行し、成果物をコミットまたは Pages アーティファクトとしてアップロードします。</p></li>
-<li><p>Pages は <code class="docutils literal notranslate"><span class="pre">.nojekyll</span></code> を自動生成するため、追加設定は不要です。テーマやメタ情報は <code class="docutils literal notranslate"><span class="pre">docs/conf.py</span></code> で調整できます。</p></li>
+<li><p>初回のみ GitHub の <strong>Settings → Pages</strong> でソースを「GitHub Actions」に変更してください。</p></li>
+<li><p>ワークフローでは <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span> <span class="pre">--group</span> <span class="pre">docs</span></code> → <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">sphinx-apidoc</span></code> → <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">sphinx-build</span> <span class="pre">-b</span> <span class="pre">html</span></code> を順に実行し、<code class="docutils literal notranslate"><span class="pre">docs/_build/html</span></code> をアーティファクト化して Pages にデプロイします。</p></li>
+<li><p>Pages には <code class="docutils literal notranslate"><span class="pre">.nojekyll</span></code> を自動生成してアップロードするため、静的アセット（<code class="docutils literal notranslate"><span class="pre">_static</span></code> など）も確実に配信されます。追加設定は不要です。</p></li>
 </ol>
+<p>手動で公開フローを検証したい場合は、同じコマンド列をローカルで実行し、<code class="docutils literal notranslate"><span class="pre">docs/_build/html</span></code> の内容をそのまま配信対象にすれば GitHub Pages と一致します。</p>
 </section>
 <section id="api">
 <h2>API リファレンスを更新する際のヒント<a class="headerlink" href="#api" title="Link to this heading">¶</a></h2>
@@ -332,7 +351,7 @@ make<span class="w"> </span>linkcheck
 
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on 2025-09-28</div>
+              Last updated on 2025-09-29</div>
           </div>
           <div class="right-details">
 

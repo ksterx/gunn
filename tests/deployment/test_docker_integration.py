@@ -47,7 +47,12 @@ class TestDockerIntegration:
         )
 
         assert result.returncode == 0, f"Docker build failed: {result.stderr}"
-        assert "Successfully tagged gunn:test" in result.stdout
+        # Docker build output can be in stdout or stderr, check both
+        build_output = result.stdout + result.stderr
+        assert (
+            "Successfully tagged gunn:test" in build_output
+            or "naming to docker.io/library/gunn:test done" in build_output
+        )
 
     @pytest.mark.slow
     @pytest.mark.integration
