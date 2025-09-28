@@ -10,16 +10,29 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.6
+    # Ruff version.
+    rev: v0.13.2
     hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+      # Run the linter.
+      - id: ruff-check
+        args: [--fix]
+      # Run the formatter.
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.7.1
     hooks:
       - id: mypy
-        additional_dependencies: [pydantic, orjson, jsonpatch, structlog, prometheus-client, opentelemetry-api, fastapi, websockets, aiosqlite]
+        additional_dependencies:
+          [
+            pydantic,
+            orjson,
+            jsonpatch,
+            structlog,
+            prometheus-client,
+            opentelemetry-api,
+            fastapi,
+            websockets,
+            aiosqlite,
+          ]
         args: [--strict, --ignore-missing-imports]
-        exclude: ^(src/gunn/utils/test_hashing_integration\.py|src/gunn/utils/test_hashing\.py|src/gunn/utils/hashing_demo\.py)$

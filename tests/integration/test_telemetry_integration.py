@@ -171,9 +171,10 @@ class TestTelemetryIntegration:
         observation_policy.latency_model.calculate_delay.return_value = 0.01
 
         # Mock the methods with patch
-        with patch.object(
-            observation_policy, "should_observe_event", return_value=True
-        ), patch.object(observation_policy, "filter_world_state") as mock_filter:
+        with (
+            patch.object(observation_policy, "should_observe_event", return_value=True),
+            patch.object(observation_policy, "filter_world_state") as mock_filter,
+        ):
             mock_view = MagicMock()
             mock_view.view_seq = 1
             mock_view.visible_entities = {}
@@ -270,9 +271,9 @@ class TestTelemetryIntegration:
             duration = end_time - start_time
 
             # Should complete 20 operations (10 intents + 10 broadcasts) in reasonable time
-            assert (
-                duration < 2.0
-            ), f"Operations took too long with telemetry: {duration:.3f}s"
+            assert duration < 2.0, (
+                f"Operations took too long with telemetry: {duration:.3f}s"
+            )
 
             # Allow processing to complete
             await asyncio.sleep(0.5)
@@ -300,7 +301,7 @@ class TestTelemetryIntegration:
             await orchestrator.submit_intent(invalid_intent)
 
         # Submit a stale intent
-        with pytest.raises(Exception):  # Could be StaleContextError or other
+        with pytest.raises(Exception):  # noqa: B017
             stale_intent: Intent = {
                 "kind": "Speak",
                 "payload": {"text": "Hello"},
@@ -331,6 +332,6 @@ class TestTelemetryIntegration:
         }
 
         for metric in expected_metrics:
-            assert any(
-                metric in name for name in metric_names
-            ), f"Metric {metric} not found in {metric_names}"
+            assert any(metric in name for name in metric_names), (
+                f"Metric {metric} not found in {metric_names}"
+            )
