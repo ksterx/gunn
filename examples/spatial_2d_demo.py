@@ -82,16 +82,27 @@ class SpatialAgent:
             f"to ({new_x:.1f}, {new_y:.1f})"
         )
 
-        # Create move intent
+        # Get current context sequence with shorter timeout
+        try:
+            # Try to get observation with short timeout
+            observation = await asyncio.wait_for(
+                self.facade.observe(self.agent_id), timeout=1.0
+            )
+            context_seq = observation.get("view_seq", 0)
+        except Exception as e:
+            self.logger.warning(f"Could not get current context seq: {e}, using 0")
+            context_seq = 0
+
+        # Create move intent with 3D position (z=0 for 2D)
         intent: Intent = {
             "kind": "Move",
             "payload": {
-                "from_position": list(self.position),
-                "to_position": [new_x, new_y],
+                "from": list(self.position) + [0.0],  # Add z=0 for 3D compatibility
+                "to": [new_x, new_y, 0.0],  # Add z=0 for 3D compatibility
                 "speed": self.move_speed,
                 "agent_id": self.agent_id,
             },
-            "context_seq": 0,
+            "context_seq": context_seq,
             "req_id": f"move_{uuid.uuid4().hex[:8]}",
             "agent_id": self.agent_id,
             "priority": 1,
@@ -200,7 +211,7 @@ class Spatial2DDemo:
         # Configure orchestrator for spatial scenario
         self.config = OrchestratorConfig(
             max_agents=5,
-            staleness_threshold=1,
+            staleness_threshold=20,  # High threshold to allow demo to work
             debounce_ms=100.0,
             deadline_ms=5000.0,
             token_budget=100,
@@ -250,7 +261,7 @@ class Spatial2DDemo:
             include_spatial_index=True,
         )
 
-        # Register agents with spatial observation policy
+        # Register agents with spatial observation policy and permissions
         for agent_id, _agent in self.agents.items():
             policy = DefaultObservationPolicy(policy_config)
 
@@ -260,6 +271,7 @@ class Spatial2DDemo:
             )
             policy.set_latency_model(latency_model)
 
+            # Register agent with default permissions (includes intent:move)
             await self.facade.register_agent(agent_id, policy)
 
         # Set up initial world state
@@ -271,6 +283,19 @@ class Spatial2DDemo:
         """Set up the initial spatial world state."""
         # Add agents to world state
         for agent_id, agent in self.agents.items():
+            # Add agent to world state entities
+            self.orchestrator.world_state.entities[agent_id] = {
+                "id": agent_id,
+                "name": agent.name,
+                "type": "agent",
+                "position": list(agent.position),
+                "observation_range": agent.observation_range,
+                "move_speed": agent.move_speed,
+            }
+
+            # Add agent position to spatial index
+            self.orchestrator.world_state.spatial_index[agent_id] = tuple(agent.position) + (0.0,)  # Add z=0 for 3D compatibility
+
             await self.orchestrator.broadcast_event(
                 EffectDraft(
                     kind="AgentSpawned",

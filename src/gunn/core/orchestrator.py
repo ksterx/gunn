@@ -508,14 +508,21 @@ class DefaultEffectValidator:
 
         current_pos = world_state.spatial_index[agent_id]
 
-        # Validate target position format
+        # Validate target position format (support both 2D and 3D)
         target = payload.get("to")
-        if not target or not isinstance(target, list | tuple) or len(target) != 3:
+        if not target or not isinstance(target, (list, tuple)) or len(target) < 2:
             failures.append("invalid_target_position_format")
             return failures
 
         try:
-            target_pos = tuple(float(x) for x in target)
+            # Convert to 3D if needed (2D -> add z=0)
+            if len(target) == 2:
+                target_pos = (float(target[0]), float(target[1]), 0.0)
+            elif len(target) >= 3:
+                target_pos = (float(target[0]), float(target[1]), float(target[2]))
+            else:
+                failures.append("invalid_target_position_format")
+                return failures
         except (ValueError, TypeError):
             failures.append("invalid_target_position_values")
             return failures
@@ -1054,13 +1061,14 @@ class Orchestrator:
         self._logger.info("Sim time authority changed", authority=authority)
 
     async def register_agent(
-        self, agent_id: str, policy: ObservationPolicy
+        self, agent_id: str, policy: ObservationPolicy, permissions: set[str] | None = None
     ) -> AgentHandle:
-        """Register a new agent with observation policy.
+        """Register a new agent with observation policy and permissions.
 
         Args:
             agent_id: Unique identifier for the agent
             policy: Observation policy for this agent
+            permissions: Set of permissions for the agent. If None, uses default permissions.
 
         Returns:
             AgentHandle for the registered agent
@@ -1088,6 +1096,19 @@ class Orchestrator:
         # Create timed queue for this agent
         self._per_agent_queues[agent_id] = TimedQueue()
 
+        # Set agent permissions (use defaults if not provided)
+        if permissions is None:
+            # Default permissions for newly registered agents
+            permissions = {
+                "submit_intent",
+                "intent:move",
+                "intent:speak",
+                "intent:interact",
+                "intent:custom"
+            }
+
+        self.effect_validator.set_agent_permissions(agent_id, permissions)
+
         # Update active agents count metric
         update_active_agents_count(len(self.agent_handles))
 
@@ -1096,6 +1117,7 @@ class Orchestrator:
             agent_id=agent_id,
             total_agents=len(self.agent_handles),
             policy_type=type(policy).__name__,
+            permissions=list(permissions),
         )
 
         return handle
@@ -1920,28 +1942,34 @@ class Orchestrator:
 
         try:
             if effect_kind == "Move":
-                # Update entity position
-                if "position" in payload:
-                    position = payload["position"]
-                    if isinstance(position, list | tuple) and len(position) >= 3:
-                        self.world_state.spatial_index[source_id] = (
-                            float(position[0]),
-                            float(position[1]),
-                            float(position[2]),
-                        )
+                # Handle unified position format: "to" field (new) or "position" field (legacy)
+                position = payload.get("to") or payload.get("position")
 
-                # Update entity data
-                if source_id not in self.world_state.entities:
-                    self.world_state.entities[source_id] = {}
+                if position and isinstance(position, (list, tuple)):
+                    # Convert 2D to 3D if needed
+                    if len(position) == 2:
+                        position = [float(position[0]), float(position[1]), 0.0]
+                    elif len(position) >= 3:
+                        position = [float(position[0]), float(position[1]), float(position[2])]
+                    else:
+                        position = None
 
-                entity_data = self.world_state.entities[source_id]
-                if isinstance(entity_data, dict):
-                    entity_data.update(
-                        {
-                            "last_position": position,
-                            "last_move_time": effect["sim_time"],
-                        }
-                    )
+                    if position:
+                        # Update spatial index
+                        self.world_state.spatial_index[source_id] = tuple(position)
+
+                        # Update entity data
+                        if source_id not in self.world_state.entities:
+                            self.world_state.entities[source_id] = {}
+
+                        entity_data = self.world_state.entities[source_id]
+                        if isinstance(entity_data, dict):
+                            entity_data.update(
+                                {
+                                    "last_position": position,
+                                    "last_move_time": effect["sim_time"],
+                                }
+                            )
 
             elif effect_kind == "Speak" or effect_kind == "SpeakResponse":
                 # Update entity with speaking information

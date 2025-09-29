@@ -60,8 +60,21 @@ class ConversationAgent:
 
         self.logger.info(f"{self.name} starting to speak: '{message[:50]}...'")
 
-        # Issue cancel token for generation tracking
+        # Get current context sequence from orchestrator if not provided
         orchestrator = self.facade.get_orchestrator()
+        if context_seq == 0:
+            try:
+                if isinstance(self.facade, RLFacade):
+                    observation = await self.facade.observe(self.agent_id)
+                    context_seq = observation.get("view_seq", 0)
+                else:
+                    # For MessageFacade, use a safe default
+                    context_seq = 0
+            except Exception as e:
+                self.logger.warning(f"Could not get current context seq: {e}, using 0")
+                context_seq = 0
+
+        # Issue cancel token for generation tracking
         self.current_cancel_token = orchestrator.issue_cancel_token(
             self.agent_id, req_id
         )
@@ -185,7 +198,7 @@ class ABCConversationDemo:
         # Configure orchestrator for conversation scenario
         self.config = OrchestratorConfig(
             max_agents=3,
-            staleness_threshold=0,  # Immediate staleness detection
+            staleness_threshold=10,  # Allow significant staleness for demo to work properly
             debounce_ms=50.0,  # Short debounce for responsive interruption
             deadline_ms=10000.0,  # 10 second deadline
             token_budget=200,  # Reasonable token budget

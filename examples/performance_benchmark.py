@@ -104,12 +104,19 @@ class PerformanceBenchmark:
             include_spatial_index=True,
         )
 
-        # Register agents with both facades
-        for i in range(self.max_agents):
-            agent_id = f"agent_{i:03d}"
-            policy = DefaultObservationPolicy(policy_config)
+        # Register agents - split between the two facades
+        half_agents = self.max_agents // 2
 
+        # Register first half with RL facade
+        for i in range(half_agents):
+            agent_id = f"rl_agent_{i:03d}"
+            policy = DefaultObservationPolicy(policy_config)
             await self.rl_facade.register_agent(agent_id, policy)
+
+        # Register second half with Message facade
+        for i in range(half_agents, self.max_agents):
+            agent_id = f"msg_agent_{i:03d}"
+            policy = DefaultObservationPolicy(policy_config)
             await self.message_facade.register_agent(agent_id, policy)
 
         self.logger.info("Performance benchmark setup complete")

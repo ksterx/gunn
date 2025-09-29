@@ -135,12 +135,22 @@ class ObservationDelta(TypedDict):
 
 class Intent(TypedDict):
     kind: Literal["Speak", "Move", "Interact", "Custom"]
-    payload: Dict[str, Any]
+    payload: Dict[str, Any]  # See Intent Payload Specifications below
     context_seq: int
     req_id: str
     agent_id: str
     priority: int  # Higher numbers = higher priority
     schema_version: str
+
+# Intent Payload Specifications
+# Move Intent:
+#   payload: {
+#     "from": [x, y, z],     # Current position (3D coordinates)
+#     "to": [x, y, z],       # Target position (3D coordinates)
+#     "speed": float,        # Movement speed (optional)
+#     "agent_id": str        # Moving agent ID
+#   }
+# Note: 2D coordinates [x, y] are automatically converted to 3D [x, y, 0.0]
 
 class EffectDraft(TypedDict):
     """External input for effects - Orchestrator fills in uuid, global_seq, sim_time"""
@@ -204,8 +214,13 @@ class Orchestrator:
         """Set which adapter controls sim_time"""
         self._sim_time_authority = authority
 
-    async def register_agent(self, agent_id: str, policy: ObservationPolicy) -> AgentHandle:
-        """Register a new agent with observation policy"""
+    async def register_agent(self, agent_id: str, policy: ObservationPolicy,
+                           permissions: set[str] | None = None) -> AgentHandle:
+        """Register a new agent with observation policy and permissions.
+
+        If permissions is None, automatically sets default permissions:
+        ["submit_intent", "intent:move", "intent:speak", "intent:interact", "intent:custom"]
+        """
 
     async def broadcast_event(self, draft: EffectDraft) -> None:
         """Create complete effect from draft and distribute observations"""
@@ -639,9 +654,31 @@ class EffectValidator(Protocol):
         """Validate if intent can be executed"""
 
 class DefaultEffectValidator:
-    """Default implementation of EffectValidator"""
+    """Default implementation of EffectValidator with 2D/3D coordinate support"""
     def validate_intent(self, intent: Intent, world_state: WorldState) -> bool:
-        # TODO: Implement real validation logic
+        # Validate agent permissions
+        # For Move intents: validate position format and convert 2D to 3D
+        if intent["kind"] == "Move":
+            return self._validate_move_intent(intent, world_state)
+        return True
+
+    def _validate_move_intent(self, intent: Intent, world_state: WorldState) -> bool:
+        """Validate Move intent with automatic 2D to 3D coordinate conversion"""
+        payload = intent["payload"]
+        position = payload.get("to") or payload.get("position")  # Support both formats
+
+        if not position or not isinstance(position, (list, tuple)):
+            return False
+
+        # Accept both 2D and 3D coordinates
+        if len(position) == 2:
+            # Convert 2D to 3D automatically
+            position = [float(position[0]), float(position[1]), 0.0]
+        elif len(position) == 3:
+            position = [float(x) for x in position]
+        else:
+            return False  # Invalid coordinate format
+
         return True
 ```
 

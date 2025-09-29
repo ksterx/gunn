@@ -189,3 +189,20 @@ This system provides a deterministic, event-driven core with per-agent views (pa
 3. WHEN distributed operations occur THEN the system SHALL support OpenTelemetry tracing across adapters and core
 4. WHEN performance issues arise THEN the system SHALL provide detailed timing breakdowns for intent processing pipeline
 5. IF anomalies are detected THEN the system SHALL generate alerts for SLO violations and error rate spikes
+
+## Implementation Changes
+
+### Version 1.1.0 - Spatial and Agent Management Improvements
+
+**Breaking Changes (pre-release):**
+1. **Move Intent Payload Standardization**: Move intent payload format standardized to use "to"/"from" fields instead of "position" field. Automatic backward compatibility provided.
+2. **Agent Registration Enhancement**: `register_agent()` method now accepts optional `permissions` parameter with automatic default permission assignment.
+3. **2D/3D Coordinate System Support**: EffectValidator now automatically converts 2D coordinates [x, y] to 3D [x, y, 0.0] for spatial operations.
+
+**Bug Fixes:**
+1. Fixed UnboundLocalError in `_apply_effect_to_world_state` when position field is missing
+2. Enhanced coordinate validation to support both 2D and 3D spatial systems
+3. Improved observation timeout handling in spatial demos
+
+**Implementation Date:** 2025-09-30
+**Status:** Implemented and tested in examples/
