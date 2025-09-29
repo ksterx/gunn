@@ -253,9 +253,9 @@ class GracefulShutdownHandler:
     def __init__(self, timeout_seconds: float = 30.0):
         self.timeout_seconds = timeout_seconds
         self._shutdown_event = asyncio.Event()
-        self._shutdown_tasks: list[asyncio.Task] = []
+        self._shutdown_tasks: list[asyncio.Task[Any]] = []
 
-    def register_shutdown_task(self, coro: Coroutine) -> None:
+    def register_shutdown_task(self, coro: Coroutine[Any, Any, Any]) -> None:
         """Register a coroutine to run during shutdown."""
         task = asyncio.create_task(coro)
         self._shutdown_tasks.append(task)

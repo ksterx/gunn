@@ -69,7 +69,7 @@ def main() -> None:
     # 4. Demonstrate corruption detection
     print("4. Corruption Detection:")
     # Create a corrupted copy
-    corrupted_entries = log_entries.copy()
+    corrupted_entries: list = log_entries.copy()
     corrupted_entries[2]["effect"]["kind"] = "HackedMove"  # Tamper with data
 
     print("   Tampering with event 3...")

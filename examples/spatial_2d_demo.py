@@ -194,7 +194,7 @@ class SpatialAgent:
 class Spatial2DDemo:
     """Main demo class for 2D spatial simulation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = get_logger("spatial_2d_demo")
 
         # Configure orchestrator for spatial scenario

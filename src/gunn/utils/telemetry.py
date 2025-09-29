@@ -887,7 +887,7 @@ class SystemMonitor:
 class BandwidthMonitor:
     """Monitor bandwidth usage for patch operations and other data transfers."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._logger = get_logger("gunn.telemetry.bandwidth")
 
     def record_patch_bandwidth(

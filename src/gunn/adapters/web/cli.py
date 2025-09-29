@@ -68,7 +68,7 @@ def run_server(
     world_id: str,
     rate_limit_requests: int,
     rate_limit_window: int,
-    auth_token: tuple,
+    auth_token: tuple[str, ...],
 ) -> None:
     """Run the Web adapter server."""
     # Setup logging

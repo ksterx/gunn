@@ -13,7 +13,13 @@ from typing import Any, Literal, Protocol
 from gunn.core.event_log import EventLog
 from gunn.policies.observation import ObservationPolicy
 from gunn.schemas.messages import WorldState
-from gunn.schemas.types import CancelToken, Effect, EffectDraft, Intent
+from gunn.schemas.types import (
+    CancelToken,
+    Effect,
+    EffectDraft,
+    Intent,
+    ObservationDelta,
+)
 from gunn.storage.dedup_store import DedupStore, InMemoryDedupStore
 from gunn.utils.backpressure import backpressure_manager
 from gunn.utils.errors import (
@@ -2087,9 +2093,9 @@ class Orchestrator:
                 # For the first observation or if we don't have previous view, create a full view
                 if current_view_seq == 0:
                     # First observation - create delta with full state
-                    observation_delta = {
-                        "view_seq": new_view.view_seq,
-                        "patches": [
+                    observation_delta = ObservationDelta(
+                        view_seq=new_view.view_seq,
+                        patches=[
                             {
                                 "op": "replace",
                                 "path": "/visible_entities",
@@ -2101,9 +2107,9 @@ class Orchestrator:
                                 "value": new_view.visible_relationships,
                             },
                         ],
-                        "context_digest": new_view.context_digest,
-                        "schema_version": "1.0.0",
-                    }
+                        context_digest=new_view.context_digest,
+                        schema_version="1.0.0",
+                    )
                 else:
                     # Generate incremental delta
                     # For now, create a simplified delta based on the effect
@@ -2187,7 +2193,7 @@ class Orchestrator:
         new_view: Any,
         agent_id: str,
         observation_policy: ObservationPolicy,
-    ) -> dict[str, Any]:
+    ) -> ObservationDelta:
         """Create observation delta based on effect type and content.
 
         Args:
@@ -2339,12 +2345,12 @@ class Orchestrator:
                 },
             ]
 
-        return {
-            "view_seq": new_view.view_seq,
-            "patches": patches,
-            "context_digest": new_view.context_digest,
-            "schema_version": "1.0.0",
-        }
+        return ObservationDelta(
+            view_seq=new_view.view_seq,
+            patches=patches,
+            context_digest=new_view.context_digest,
+            schema_version="1.0.0",
+        )
 
     def get_memory_stats(self) -> dict[str, Any]:
         """Get comprehensive memory management statistics.
