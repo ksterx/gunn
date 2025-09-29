@@ -179,7 +179,7 @@ class MockUnityAdapter:
         if not self.physics_enabled:
             return
 
-        moving_object = self.game_objects[moving_object_id]
+        # moving_object = self.game_objects[moving_object_id]  # Unused
 
         # Simple collision detection with other objects
         for other_id, other_object in self.game_objects.items():
@@ -351,7 +351,7 @@ class UnityAgent:
         }
 
         try:
-            effect, observation = await self.facade.step(self.agent_id, intent)
+            _effect, _observation = await self.facade.step(self.agent_id, intent)
             self.position = target_pos
             return True
         except Exception as e:
@@ -381,7 +381,7 @@ class UnityAgent:
         }
 
         try:
-            effect, observation = await self.facade.step(self.agent_id, intent)
+            _effect, _observation = await self.facade.step(self.agent_id, intent)
             return True
         except Exception as e:
             self.logger.error(f"Unity interaction failed: {e}")
@@ -402,7 +402,7 @@ class UnityAgent:
         }
 
         try:
-            effect, observation = await self.facade.step(self.agent_id, intent)
+            _effect, _observation = await self.facade.step(self.agent_id, intent)
             return True
         except Exception as e:
             self.logger.error(f"Unity speech failed: {e}")
@@ -471,14 +471,14 @@ class UnityIntegrationDemo:
         )
 
         # Register agents
-        for agent_id, agent in self.agents.items():
+        for agent_id, _agent in self.agents.items():
             policy = DefaultObservationPolicy(policy_config)
             await self.facade.register_agent(agent_id, policy)
 
         # Spawn agents in Unity scene
-        for agent_id, agent in self.agents.items():
+        for agent_id, _agent in self.agents.items():
             await self.unity_adapter.spawn_game_object(
-                agent_id, "agent", agent.position
+                agent_id, "agent", _agent.position
             )
 
         # Spawn scene objects in Unity
@@ -488,7 +488,9 @@ class UnityIntegrationDemo:
             )
 
         # Start Unity time tick loop
-        asyncio.create_task(self.unity_adapter.start_time_tick_loop())
+        self._time_tick_task = asyncio.create_task(
+            self.unity_adapter.start_time_tick_loop()
+        )
 
         self.logger.info("Unity integration demo setup complete")
 
@@ -564,7 +566,7 @@ class UnityIntegrationDemo:
         campfire_pos = self.scene_objects["campfire"]["position"]
 
         coordination_tasks = []
-        for i, (agent_id, agent) in enumerate(self.agents.items()):
+        for i, (_agent_id, agent) in enumerate(self.agents.items()):
             # Position agents in a circle around campfire
             angle = (i * 2 * math.pi) / len(self.agents)
             radius = 4.0

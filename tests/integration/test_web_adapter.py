@@ -242,7 +242,7 @@ class TestWebAdapterREST:
         }
 
         # Make requests up to the limit
-        for i in range(10):  # Rate limit is 10 requests
+        for _ in range(10):  # Rate limit is 10 requests
             response = client.post(
                 "/worlds/test_world/agents/agent1/intents",
                 json=payload,
@@ -403,7 +403,7 @@ class TestWebAdapterWebSocket:
         uri = f"ws://127.0.0.1:{port}/worlds/test_world/agents/agent1/observations/stream?token=invalid_token"
 
         try:
-            async with connect(uri) as websocket:
+            async with connect(uri) as _websocket:
                 # Should not reach here
                 assert False, "Connection should have failed"
         except ws_exceptions.ConnectionClosedError as e:

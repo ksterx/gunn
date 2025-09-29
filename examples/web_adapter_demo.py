@@ -118,7 +118,7 @@ async def demo_rest_api():
     port = sock.getsockname()[1]
     sock.close()
 
-    orchestrator, web_adapter, agent1, agent2 = await setup_demo_environment()
+    _orchestrator, web_adapter, _agent1, _agent2 = await setup_demo_environment()
 
     # Start server in thread
     server_thread = Thread(
@@ -205,7 +205,7 @@ async def demo_websocket():
     port = sock.getsockname()[1]
     sock.close()
 
-    orchestrator, web_adapter, agent1, agent2 = await setup_demo_environment()
+    orchestrator, web_adapter, _agent1, _agent2 = await setup_demo_environment()
 
     # Start server in thread
     server_thread = Thread(
@@ -269,7 +269,7 @@ async def demo_authentication():
     """Demonstrate authentication and authorization features."""
     print("\n=== Authentication Demo ===")
 
-    orchestrator, web_adapter, agent1, agent2 = await setup_demo_environment()
+    _orchestrator, web_adapter, _agent1, _agent2 = await setup_demo_environment()
 
     # Add a token with limited permissions
     web_adapter.add_auth_token(

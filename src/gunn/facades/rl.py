@@ -268,7 +268,7 @@ class RLFacade:
             ValidationError: If intent validation fails
         """
         # Submit intent and wait for processing
-        req_id = await self._orchestrator.submit_intent(intent)
+        _req_id = await self._orchestrator.submit_intent(intent)
 
         # Wait for intent processing to complete
         # This is necessary to ensure the effect is created before trying to get observation
@@ -315,7 +315,7 @@ class RLFacade:
         self._logger.info("Shutting down RL facade")
 
         # Cancel all pending steps
-        for agent_id, task in list(self._pending_steps.items()):
+        for _agent_id, task in list(self._pending_steps.items()):
             if not task.done():
                 task.cancel()
                 try:

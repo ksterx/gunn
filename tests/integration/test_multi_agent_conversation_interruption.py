@@ -90,7 +90,7 @@ class MockLLMAgent:
         }
 
         if isinstance(self.facade, RLFacade):
-            effect, observation = await self.facade.step(self.agent_id, intent)
+            _effect, _observation = await self.facade.step(self.agent_id, intent)
             return req_id
         else:
             await self.facade.emit("Speak", {"message": message}, self.agent_id)
@@ -180,9 +180,9 @@ class TestMultiAgentConversationInterruption:
     ) -> None:
         """Test A/B/C conversation scenario with B interrupting A."""
         # Register agents
-        alice_handle = await rl_facade.register_agent("alice", conversation_policy)
-        bob_handle = await rl_facade.register_agent("bob", conversation_policy)
-        charlie_handle = await rl_facade.register_agent("charlie", conversation_policy)
+        _alice_handle = await rl_facade.register_agent("alice", conversation_policy)
+        _bob_handle = await rl_facade.register_agent("bob", conversation_policy)
+        _charlie_handle = await rl_facade.register_agent("charlie", conversation_policy)
 
         # Create mock agents
         alice = MockLLMAgent("alice", rl_facade)
@@ -248,7 +248,7 @@ class TestMultiAgentConversationInterruption:
             "about your quantum entanglement ideas when you're ready."
         )
 
-        charlie_result, charlie_interrupted = await charlie.generate_with_interruption(
+        _charlie_result, charlie_interrupted = await charlie.generate_with_interruption(
             charlie_message, "charlie_msg_1", 2
         )
 
@@ -305,7 +305,7 @@ class TestMultiAgentConversationInterruption:
             await asyncio.sleep(0.01)  # 10ms between events
 
         # Complete generation
-        result, was_interrupted = await generation_task
+        _result, was_interrupted = await generation_task
 
         # Should be interrupted, but debounce should prevent excessive interruptions
         assert was_interrupted
@@ -327,7 +327,7 @@ class TestMultiAgentConversationInterruption:
 
         # Issue cancel token
         req_id = "timing_test_1"
-        cancel_token = orchestrator.issue_cancel_token("timing_agent", req_id)
+        _cancel_token = orchestrator.issue_cancel_token("timing_agent", req_id)
 
         # Start generation
         generation_task = asyncio.create_task(
@@ -355,7 +355,7 @@ class TestMultiAgentConversationInterruption:
         )
 
         # Wait for cancellation to take effect
-        result, was_interrupted = await generation_task
+        _result, was_interrupted = await generation_task
         cancel_end = time.perf_counter()
 
         cancellation_time_ms = (cancel_end - cancel_start) * 1000
@@ -377,7 +377,7 @@ class TestMultiAgentConversationInterruption:
         )
         await rl_facade.register_agent("other_agent", conversation_policy)
 
-        agent = MockLLMAgent("staleness_agent", rl_facade)
+        _agent = MockLLMAgent("staleness_agent", rl_facade)
         orchestrator = rl_facade.get_orchestrator()
 
         # Setup permissions and world state for agents
@@ -553,7 +553,7 @@ class TestMultiAgentConversationInterruption:
     ) -> None:
         """Test regeneration with updated context after interruption."""
         # Register agents
-        agent_handle = await rl_facade.register_agent(
+        _agent_handle = await rl_facade.register_agent(
             "regen_agent", conversation_policy
         )
         await rl_facade.register_agent("context_agent", conversation_policy)
@@ -584,7 +584,7 @@ class TestMultiAgentConversationInterruption:
         )
 
         # Complete first generation (should be interrupted)
-        result1, was_interrupted = await generation_task
+        _result1, was_interrupted = await generation_task
         assert was_interrupted
 
         # Get updated context sequence (after context update event)
@@ -620,7 +620,7 @@ class TestMultiAgentConversationInterruption:
         self.setup_agent_permissions(orchestrator, ["replay_alice", "replay_bob"])
 
         # Record initial world seed for deterministic replay
-        world_seed = 12345
+        _world_seed = 12345
         # orchestrator.set_world_seed(world_seed)  # Method not implemented yet
 
         # Execute conversation scenario

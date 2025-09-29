@@ -348,14 +348,14 @@ class TestFilteringAccuracy:
 
         # Check that relationships are filtered to only visible entities
         for entity_id, relationships in view.visible_relationships.items():
-            assert (
-                entity_id in view.visible_entities
-            ), f"Relationship source {entity_id} not visible"
+            assert entity_id in view.visible_entities, (
+                f"Relationship source {entity_id} not visible"
+            )
 
             for target_id in relationships:
-                assert (
-                    target_id in view.visible_entities
-                ), f"Relationship target {target_id} not visible"
+                assert target_id in view.visible_entities, (
+                    f"Relationship target {target_id} not visible"
+                )
 
     def test_relationship_depth_filtering(
         self, complex_world_state: WorldState

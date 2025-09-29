@@ -275,7 +275,7 @@ class TestFaultTolerance:
             "schema_version": "1.0.0",
         }
 
-        effect, observation = await rl_facade.step("partition_agent_0", intent)
+        effect, _observation = await rl_facade.step("partition_agent_0", intent)
         assert effect is not None, "Normal operation should succeed"
 
         # Simulate network partition (reduced duration)
@@ -298,7 +298,7 @@ class TestFaultTolerance:
         start_time = time.perf_counter()
 
         try:
-            effect, observation = await asyncio.wait_for(
+            effect, _observation = await asyncio.wait_for(
                 rl_facade.step("partition_agent_1", partition_intent), timeout=3.0
             )
             recovery_time = time.perf_counter() - start_time
@@ -328,7 +328,7 @@ class TestFaultTolerance:
             "schema_version": "1.0.0",
         }
 
-        effect, observation = await rl_facade.step(
+        effect, _observation = await rl_facade.step(
             "partition_agent_2", post_partition_intent
         )
         assert effect is not None, "Normal operation should resume after partition"
@@ -412,7 +412,7 @@ class TestFaultTolerance:
             "schema_version": "1.0.0",
         }
 
-        effect, observation = await rl_facade.step(
+        effect, _observation = await rl_facade.step(
             "adapter_test_agent", recovery_intent
         )
         assert effect is not None, "Should recover after adapter failures"
@@ -457,7 +457,7 @@ class TestFaultTolerance:
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    effect, observation = await rl_facade.step(agent_id, intent)
+                    _effect, _observation = await rl_facade.step(agent_id, intent)
                     return intent["req_id"], True
                 except (TimeoutError, ConnectionError):
                     if attempt < max_retries - 1:
@@ -493,7 +493,7 @@ class TestFaultTolerance:
 
         for result in results:
             if isinstance(result, tuple):
-                req_id, success = result
+                _req_id, success = result
                 if success:
                     successful_intents += 1
                 else:
@@ -524,7 +524,7 @@ class TestFaultTolerance:
             "schema_version": "1.0.0",
         }
 
-        effect, observation = await rl_facade.step(agent_ids[0], recovery_intent)
+        effect, _observation = await rl_facade.step(agent_ids[0], recovery_intent)
         assert effect is not None, "System should be functional after cascade test"
 
     @pytest.mark.asyncio
@@ -573,7 +573,7 @@ class TestFaultTolerance:
                 }
 
                 try:
-                    effect, observation = await rl_facade.step(
+                    effect, _observation = await rl_facade.step(
                         "circuit_test_agent", intent
                     )
 
@@ -619,7 +619,7 @@ class TestFaultTolerance:
         )
 
         # Test that group A operations fail
-        group_a_intent: Intent = {
+        _group_a_intent: Intent = {
             "kind": "Custom",
             "payload": {"group": "A"},
             "context_seq": 0,
@@ -649,7 +649,7 @@ class TestFaultTolerance:
         }
 
         # Group B should succeed
-        effect, observation = await rl_facade.step(group_b_agents[0], group_b_intent)
+        effect, _observation = await rl_facade.step(group_b_agents[0], group_b_intent)
         assert effect is not None, "Group B should be unaffected by Group A failures"
 
         # Disable failure and verify group A recovers
@@ -667,7 +667,7 @@ class TestFaultTolerance:
             "schema_version": "1.0.0",
         }
 
-        effect, observation = await rl_facade.step(group_a_agents[0], recovery_intent)
+        effect, _observation = await rl_facade.step(group_a_agents[0], recovery_intent)
         assert effect is not None, "Group A should recover after failure is resolved"
 
     @pytest.mark.asyncio
@@ -695,7 +695,7 @@ class TestFaultTolerance:
                 "schema_version": "1.0.0",
             }
 
-            effect, observation = await rl_facade.step("consistency_agent_1", intent)
+            effect, _observation = await rl_facade.step("consistency_agent_1", intent)
             baseline_intents.append((intent, effect))
 
         # Get initial event log state
@@ -726,7 +726,7 @@ class TestFaultTolerance:
             }
 
             try:
-                effect, observation = await rl_facade.step(
+                effect, _observation = await rl_facade.step(
                     "consistency_agent_2", intent
                 )
                 failure_period_intents.append((intent, effect))
@@ -768,7 +768,7 @@ class TestFaultTolerance:
             "schema_version": "1.0.0",
         }
 
-        effect, observation = await rl_facade.step(
+        effect, _observation = await rl_facade.step(
             "consistency_agent_1", verification_intent
         )
         assert effect is not None, (
@@ -849,7 +849,7 @@ class TestFaultTolerance:
                     start_time = time.perf_counter()
 
                     try:
-                        effect, observation = await rl_facade.step(agent_id, intent)
+                        _effect, _observation = await rl_facade.step(agent_id, intent)
                         successful_ops += 1
 
                         end_time = time.perf_counter()
@@ -946,7 +946,7 @@ class TestFaultTolerance:
                 "schema_version": "1.0.0",
             }
 
-            effect, observation = await rl_facade.step(agent_ids[0], recovery_intent)
+            effect, _observation = await rl_facade.step(agent_ids[0], recovery_intent)
             assert effect is not None, (
                 "Should return to normal operation after load test"
             )

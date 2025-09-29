@@ -107,9 +107,9 @@ class TestProtobufSchema:
         """Test that streaming RPC is properly defined."""
         # StreamObservations should return a stream
         stream_pattern = r"rpc StreamObservations\([^)]+\) returns \(stream [^)]+\);"
-        assert re.search(
-            stream_pattern, proto_content
-        ), "StreamObservations RPC not properly defined as streaming"
+        assert re.search(stream_pattern, proto_content), (
+            "StreamObservations RPC not properly defined as streaming"
+        )
 
     def test_enum_definitions(self, proto_content: str) -> None:
         """Test that enums are properly defined with UNSPECIFIED values."""
@@ -127,9 +127,9 @@ class TestProtobufSchema:
             ):
                 # Some enums might use different naming conventions
                 zero_value_pattern = r"\w+ = 0;"
-                assert re.search(
-                    zero_value_pattern, enum_body
-                ), f"Enum {enum_name} missing zero value (required in proto3)"
+                assert re.search(zero_value_pattern, enum_body), (
+                    f"Enum {enum_name} missing zero value (required in proto3)"
+                )
 
     def test_intent_kind_enum_consistency(self, proto_content: str) -> None:
         """Test that Intent.Kind enum matches Python Intent type."""
@@ -215,9 +215,9 @@ class TestProtobufSchema:
         reserved_ranges = [(19000, 19999), (50000, 99999)]
         for num in field_numbers:
             for start, end in reserved_ranges:
-                assert not (
-                    start <= num <= end
-                ), f"Field number {num} is in reserved range"
+                assert not (start <= num <= end), (
+                    f"Field number {num} is in reserved range"
+                )
 
     def test_message_field_consistency(self, proto_content: str) -> None:
         """Test that message fields are consistent with Python types."""
@@ -297,23 +297,23 @@ class TestProtobufSchema:
         ]
 
         for signature in method_signatures:
-            assert (
-                signature in proto_content
-            ), f"Missing or incorrect method signature: {signature}"
+            assert signature in proto_content, (
+                f"Missing or incorrect method signature: {signature}"
+            )
 
     def test_breaking_change_detection(self, proto_content: str) -> None:
         """Test for potential breaking changes in the protobuf schema."""
         # Verify package version hasn't changed unexpectedly
-        assert (
-            "package gunn.simulation.v1;" in proto_content
-        ), "Package version changed - ensure this is intentional and documented"
+        assert "package gunn.simulation.v1;" in proto_content, (
+            "Package version changed - ensure this is intentional and documented"
+        )
 
         # Verify core message types haven't been removed
         core_messages = ["Intent", "Effect", "ObservationDelta", "View"]
         for message in core_messages:
-            assert (
-                f"message {message}" in proto_content
-            ), f"Core message {message} was removed - this is a breaking change"
+            assert f"message {message}" in proto_content, (
+                f"Core message {message} was removed - this is a breaking change"
+            )
 
 
 class TestProtobufPythonConsistency:
@@ -339,9 +339,9 @@ class TestProtobufPythonConsistency:
 
         # Verify Python type has all expected fields
         python_fields = set(intent_annotations.keys())
-        assert common_fields.issubset(
-            python_fields
-        ), f"Python Intent missing fields: {common_fields - python_fields}"
+        assert common_fields.issubset(python_fields), (
+            f"Python Intent missing fields: {common_fields - python_fields}"
+        )
 
     def test_effect_field_consistency(self) -> None:
         """Test that protobuf Effect fields match Python Effect TypedDict."""
@@ -359,9 +359,9 @@ class TestProtobufPythonConsistency:
         }
 
         python_fields = set(effect_annotations.keys())
-        assert common_fields.issubset(
-            python_fields
-        ), f"Python Effect missing fields: {common_fields - python_fields}"
+        assert common_fields.issubset(python_fields), (
+            f"Python Effect missing fields: {common_fields - python_fields}"
+        )
 
     def test_observation_delta_consistency(self) -> None:
         """Test that protobuf ObservationDelta matches Python ObservationDelta."""
@@ -371,9 +371,9 @@ class TestProtobufPythonConsistency:
         common_fields = {"view_seq", "patches", "context_digest", "schema_version"}
 
         python_fields = set(delta_annotations.keys())
-        assert common_fields.issubset(
-            python_fields
-        ), f"Python ObservationDelta missing fields: {common_fields - python_fields}"
+        assert common_fields.issubset(python_fields), (
+            f"Python ObservationDelta missing fields: {common_fields - python_fields}"
+        )
 
 
 if __name__ == "__main__":

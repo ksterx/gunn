@@ -127,7 +127,7 @@ class PerformanceBenchmark:
         self.logger.info(f"Running intent throughput benchmark for {duration_seconds}s")
 
         start_time = time.perf_counter()
-        start_memory, start_cpu = self._get_system_metrics()
+        start_memory, _start_cpu = self._get_system_metrics()
 
         completed_intents = 0
         failed_intents = 0
@@ -157,7 +157,7 @@ class PerformanceBenchmark:
                 }
 
                 try:
-                    effect, observation = await self.rl_facade.step(agent_id, intent)
+                    _effect, _observation = await self.rl_facade.step(agent_id, intent)
 
                     intent_latency = (time.perf_counter() - intent_start) * 1000
                     latencies.append(intent_latency)
@@ -185,7 +185,7 @@ class PerformanceBenchmark:
         end_memory, end_cpu = self._get_system_metrics()
 
         # Calculate metrics
-        total_operations = completed_intents + failed_intents
+        # total_operations = completed_intents + failed_intents  # Unused
         throughput = completed_intents / actual_duration
 
         latency_percentiles = {}
@@ -231,7 +231,7 @@ class PerformanceBenchmark:
         )
 
         start_time = time.perf_counter()
-        start_memory, start_cpu = self._get_system_metrics()
+        _start_memory, _start_cpu = self._get_system_metrics()
 
         completed_observations = 0
         failed_observations = 0
@@ -264,7 +264,7 @@ class PerformanceBenchmark:
                 obs_start = time.perf_counter()
 
                 try:
-                    observation = await self.rl_facade.observe(agent_id)
+                    _observation = await self.rl_facade.observe(agent_id)
 
                     obs_latency = (time.perf_counter() - obs_start) * 1000
                     latencies.append(obs_latency)
@@ -292,7 +292,7 @@ class PerformanceBenchmark:
         end_memory, end_cpu = self._get_system_metrics()
 
         # Calculate metrics
-        total_operations = completed_observations + failed_observations
+        # total_operations = completed_observations + failed_observations  # Unused
         throughput = completed_observations / actual_duration
 
         latency_percentiles = {}
@@ -338,7 +338,7 @@ class PerformanceBenchmark:
         )
 
         start_time = time.perf_counter()
-        start_memory, start_cpu = self._get_system_metrics()
+        _start_memory, _start_cpu = self._get_system_metrics()
 
         completed_cancellations = 0
         failed_cancellations = 0
@@ -384,7 +384,7 @@ class PerformanceBenchmark:
         end_memory, end_cpu = self._get_system_metrics()
 
         # Calculate metrics
-        total_operations = completed_cancellations + failed_cancellations
+        # total_operations = completed_cancellations + failed_cancellations  # Unused
         throughput = completed_cancellations / actual_duration
 
         latency_percentiles = {}
@@ -428,7 +428,7 @@ class PerformanceBenchmark:
         self.logger.info(f"Running memory usage benchmark for {duration_seconds}s")
 
         start_time = time.perf_counter()
-        start_memory, start_cpu = self._get_system_metrics()
+        start_memory, _start_cpu = self._get_system_metrics()
 
         memory_samples = []
         operations_completed = 0
@@ -458,7 +458,7 @@ class PerformanceBenchmark:
                     tasks.append(task)
 
                 # Event broadcasts
-                for i in range(5):
+                for _i in range(5):
                     event_task = self.orchestrator.broadcast_event(
                         {
                             "kind": "MemoryTestEvent",
@@ -526,7 +526,7 @@ class PerformanceBenchmark:
         self.logger.info("Running scalability benchmark")
 
         start_time = time.perf_counter()
-        start_memory, start_cpu = self._get_system_metrics()
+        _start_memory, _start_cpu = self._get_system_metrics()
 
         scalability_results = []
 
@@ -545,7 +545,7 @@ class PerformanceBenchmark:
 
             async def agent_workload(agent_id: str) -> int:
                 agent_completed = 0
-                for i in range(10):  # 10 operations per agent
+                for _i in range(10):  # 10 operations per agent
                     intent: Intent = {
                         "kind": "Custom",
                         "payload": {"action": "scalability_test"},
@@ -776,7 +776,7 @@ async def main() -> None:
 
         try:
             await benchmark.setup()
-            results = await benchmark.run_all_benchmarks()
+            _results = await benchmark.run_all_benchmarks()
 
             # Generate and display report
             report = benchmark.generate_report()

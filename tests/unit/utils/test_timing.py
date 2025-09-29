@@ -64,9 +64,9 @@ class TestTimedQueue:
         actual_delay = end_time - start_time
 
         # Verify timing accuracy within ±5ms tolerance
-        assert (
-            abs(actual_delay - delay) <= 0.005
-        ), f"Timing error: expected {delay}s, got {actual_delay}s"
+        assert abs(actual_delay - delay) <= 0.005, (
+            f"Timing error: expected {delay}s, got {actual_delay}s"
+        )
 
     @pytest.mark.asyncio
     async def test_ordering_by_delivery_time(self, queue):
@@ -316,9 +316,9 @@ class TestTimedQueue:
         # Check that timing is reasonably accurate
         for expected, actual in zip(expected_times, actual_times, strict=True):
             timing_error = abs(actual - expected)
-            assert (
-                timing_error <= 0.01
-            ), f"Timing error too large: {timing_error}s"  # 10ms tolerance under load
+            assert timing_error <= 0.01, (
+                f"Timing error too large: {timing_error}s"
+            )  # 10ms tolerance under load
 
     @pytest.mark.asyncio
     async def test_responsiveness_with_frequent_updates(self, queue):

@@ -221,7 +221,7 @@ class TestReplayConsistency:
         replay_seed = 67890
         results = []
 
-        for i in range(3):
+        for _ in range(3):
             engine = ReplayEngine(world_seed=replay_seed, verbose=False)
             result = await engine.replay_from_log(
                 original_log, validate_integrity=False

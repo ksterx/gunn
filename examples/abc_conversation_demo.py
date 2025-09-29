@@ -86,7 +86,7 @@ class ConversationAgent:
             }
 
             if isinstance(self.facade, RLFacade):
-                effect, observation = await self.facade.step(self.agent_id, intent)
+                _effect, _observation = await self.facade.step(self.agent_id, intent)
                 self.logger.info(
                     f"{self.name} spoke successfully: '{generated_message}'"
                 )

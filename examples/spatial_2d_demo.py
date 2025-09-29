@@ -100,7 +100,7 @@ class SpatialAgent:
 
         try:
             # Execute move
-            effect, observation = await self.facade.step(self.agent_id, intent)
+            _effect, _observation = await self.facade.step(self.agent_id, intent)
 
             # Update local position
             self.position = (new_x, new_y)
@@ -251,7 +251,7 @@ class Spatial2DDemo:
         )
 
         # Register agents with spatial observation policy
-        for agent_id, agent in self.agents.items():
+        for agent_id, _agent in self.agents.items():
             policy = DefaultObservationPolicy(policy_config)
 
             # Set distance-based latency model

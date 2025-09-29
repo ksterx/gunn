@@ -50,9 +50,9 @@ class TestOpenAPISchema:
         ]
 
         for endpoint in required_endpoints:
-            assert (
-                endpoint in paths
-            ), f"Required endpoint {endpoint} not found in schema"
+            assert endpoint in paths, (
+                f"Required endpoint {endpoint} not found in schema"
+            )
 
     def test_error_schema_matches_docs(self, openapi_schema: dict[str, Any]) -> None:
         """Test that error schema matches the structure defined in docs/errors.md."""
@@ -94,12 +94,12 @@ class TestOpenAPISchema:
         # Verify all schema_version fields have semantic versioning pattern
         semver_pattern = r"^\d+\.\d+\.\d+$"
         for schema_name, field_def in schema_version_fields:
-            assert (
-                "pattern" in field_def
-            ), f"schema_version in {schema_name} missing pattern"
-            assert (
-                field_def["pattern"] == semver_pattern
-            ), f"schema_version pattern in {schema_name} doesn't match semantic versioning"
+            assert "pattern" in field_def, (
+                f"schema_version in {schema_name} missing pattern"
+            )
+            assert field_def["pattern"] == semver_pattern, (
+                f"schema_version pattern in {schema_name} doesn't match semantic versioning"
+            )
 
     def test_pydantic_models_match_openapi(
         self, openapi_schema: dict[str, Any]
@@ -122,9 +122,9 @@ class TestOpenAPISchema:
         view_fields = set(view_dict.keys())
 
         # All required fields should be present
-        assert view_required.issubset(
-            view_fields
-        ), f"View model missing required fields: {view_required - view_fields}"
+        assert view_required.issubset(view_fields), (
+            f"View model missing required fields: {view_required - view_fields}"
+        )
 
     def test_intent_schema_validation(self, openapi_schema: dict[str, Any]) -> None:
         """Test that Intent TypedDict structure matches OpenAPI schema."""
@@ -145,15 +145,15 @@ class TestOpenAPISchema:
         intent_fields = set(intent.keys())
 
         # All required fields should be present
-        assert required_fields.issubset(
-            intent_fields
-        ), f"Intent missing required fields: {required_fields - intent_fields}"
+        assert required_fields.issubset(intent_fields), (
+            f"Intent missing required fields: {required_fields - intent_fields}"
+        )
 
         # Verify kind enum values
         kind_enum = intent_schema["properties"]["kind"]["enum"]
-        assert (
-            intent["kind"] in kind_enum
-        ), f"Intent kind {intent['kind']} not in allowed values"
+        assert intent["kind"] in kind_enum, (
+            f"Intent kind {intent['kind']} not in allowed values"
+        )
 
     def test_observation_delta_patch_format(
         self, openapi_schema: dict[str, Any]
@@ -197,9 +197,9 @@ class TestOpenAPISchema:
         """
         # Verify API version hasn't changed unexpectedly
         api_version = openapi_schema["info"]["version"]
-        assert (
-            api_version == "1.0.0"
-        ), f"API version changed to {api_version} - ensure this is intentional and documented"
+        assert api_version == "1.0.0", (
+            f"API version changed to {api_version} - ensure this is intentional and documented"
+        )
 
         # Verify core endpoint paths haven't changed
         paths = openapi_schema["paths"]
@@ -210,9 +210,9 @@ class TestOpenAPISchema:
         ]
 
         for path in core_paths:
-            assert (
-                path in paths
-            ), f"Core API path {path} was removed - this is a breaking change"
+            assert path in paths, (
+                f"Core API path {path} was removed - this is a breaking change"
+            )
 
         # Verify required fields in core schemas haven't been removed
         view_required = set(openapi_schema["components"]["schemas"]["View"]["required"])
@@ -223,9 +223,9 @@ class TestOpenAPISchema:
             "visible_relationships",
             "context_digest",
         }
-        assert expected_view_fields.issubset(
-            view_required
-        ), "Required fields removed from View schema - this is a breaking change"
+        assert expected_view_fields.issubset(view_required), (
+            "Required fields removed from View schema - this is a breaking change"
+        )
 
     def test_http_status_codes_match_errors_doc(
         self, openapi_schema: dict[str, Any]
@@ -353,14 +353,14 @@ class TestSchemaEvolution:
         invalid_versions = ["1.0", "v1.0.0", "1.0.0-beta", "1.0.0+build"]
 
         for version in valid_versions:
-            assert semver_pattern.match(
-                version
-            ), f"Valid version {version} failed pattern"
+            assert semver_pattern.match(version), (
+                f"Valid version {version} failed pattern"
+            )
 
         for version in invalid_versions:
-            assert not semver_pattern.match(
-                version
-            ), f"Invalid version {version} passed pattern"
+            assert not semver_pattern.match(version), (
+                f"Invalid version {version} passed pattern"
+            )
 
 
 if __name__ == "__main__":

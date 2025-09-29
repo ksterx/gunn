@@ -83,7 +83,7 @@ class TestMetricsExporter:
 
     def test_record_config_reload(self, metrics_exporter):
         """Test recording configuration reload events."""
-        initial_metrics = get_metrics_text()
+        _ = get_metrics_text()
 
         metrics_exporter.record_config_reload()
         metrics_exporter.record_config_reload()
@@ -161,7 +161,7 @@ class TestMetricsExporterIntegration:
     def test_get_metrics_text(self):
         """Test getting metrics in Prometheus text format."""
         config = Config()
-        exporter = create_metrics_exporter(config)
+        _ = create_metrics_exporter(config)
 
         metrics_text = get_metrics_text()
 

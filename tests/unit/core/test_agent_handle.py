@@ -126,7 +126,7 @@ class TestAgentHandleObservations:
         queue = orchestrator._per_agent_queues["test_agent"]
         await queue.put_in(0.001, mock_delta)
 
-        delta = await handle.next_observation()
+        _delta = await handle.next_observation()
         assert handle.view_seq == 10
 
     @pytest.mark.asyncio
@@ -149,7 +149,7 @@ class TestAgentHandleObservations:
         queue = orchestrator._per_agent_queues["test_agent"]
         await queue.put_in(0.001, mock_delta)
 
-        delta = await handle.next_observation()
+        _delta = await handle.next_observation()
         assert handle.view_seq == 15
 
     @pytest.mark.asyncio
@@ -446,8 +446,8 @@ class TestAgentHandleIsolation:
     ) -> None:
         """Test that agents have separate observation queues."""
         # Register multiple agents
-        handle_a = await orchestrator.register_agent("agent_a", observation_policy)
-        handle_b = await orchestrator.register_agent("agent_b", observation_policy)
+        _handle_a = await orchestrator.register_agent("agent_a", observation_policy)
+        _handle_b = await orchestrator.register_agent("agent_b", observation_policy)
 
         # Verify separate queues
         queue_a = orchestrator._per_agent_queues["agent_a"]
@@ -482,7 +482,7 @@ class TestAgentHandleIsolation:
     ) -> None:
         """Test that observation operations don't block between agents."""
         handle_a = await orchestrator.register_agent("agent_a", observation_policy)
-        handle_b = await orchestrator.register_agent("agent_b", observation_policy)
+        _handle_b = await orchestrator.register_agent("agent_b", observation_policy)
 
         # Put observation for agent_a only
         queue_a = orchestrator._per_agent_queues["agent_a"]

@@ -439,6 +439,6 @@ class TestEventLogPerformance:
         # Performance assertions (generous limits for CI)
         assert append_time < 5.0, f"Append took too long: {append_time:.3f}s"
         assert retrieval_time < 1.0, f"Retrieval took too long: {retrieval_time:.3f}s"
-        assert (
-            validation_time < 2.0
-        ), f"Validation took too long: {validation_time:.3f}s"
+        assert validation_time < 2.0, (
+            f"Validation took too long: {validation_time:.3f}s"
+        )

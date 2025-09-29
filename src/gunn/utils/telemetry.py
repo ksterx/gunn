@@ -14,7 +14,7 @@ import re
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from typing import Any
 
 import psutil
 import structlog
@@ -236,7 +236,7 @@ def setup_logging(log_level: str = "INFO", enable_pii_redaction: bool = True) ->
 
 def setup_tracing(
     service_name: str = "gunn",
-    otlp_endpoint: Optional[str] = None,
+    otlp_endpoint: str | None = None,
     enable_fastapi_instrumentation: bool = True,
 ) -> None:
     """Initialize OpenTelemetry tracing.
@@ -314,11 +314,11 @@ def log_operation(
     logger: Any,
     operation: str,
     status: str = "success",
-    global_seq: Optional[int] = None,
-    view_seq: Optional[int] = None,
-    agent_id: Optional[str] = None,
-    req_id: Optional[str] = None,
-    latency_ms: Optional[float] = None,
+    global_seq: int | None = None,
+    view_seq: int | None = None,
+    agent_id: str | None = None,
+    req_id: str | None = None,
+    latency_ms: float | None = None,
     **extra_context: Any,
 ) -> None:
     """Log an operation with standardized fields for observability.
@@ -391,7 +391,7 @@ class PerformanceTimer:
         self.record_metrics = record_metrics
         self.create_span = create_span
         self.tracer = get_tracer(tracer_name) if create_span else None
-        self.span: Optional[trace.Span] = None
+        self.span: trace.Span | None = None
         self.start_time: float | None = None
         self.end_time: float | None = None
 
@@ -785,7 +785,7 @@ def get_timing_context() -> dict[str, float]:
 class SystemMonitor:
     """Monitor system resources and record metrics."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._process = psutil.Process()
         self._last_cpu_time = time.time()
         self._last_cpu_percent = 0.0

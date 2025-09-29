@@ -155,7 +155,7 @@ class SLOValidator:
                 )
 
                 # Get observation (this includes the delivery latency) with timeout
-                observation = await asyncio.wait_for(
+                _observation = await asyncio.wait_for(
                     self.facade.observe(agent_id), timeout=1.0
                 )
 
@@ -327,7 +327,7 @@ class SLOValidator:
                 }
 
                 try:
-                    effect, observation = await asyncio.wait_for(
+                    _effect, _observation = await asyncio.wait_for(
                         self.facade.step(agent_id, intent), timeout=1.0
                     )
                     agent_completed[agent_id] += 1
@@ -601,7 +601,7 @@ class SLOValidator:
                     tasks.append(self.facade.step(agent_id, intent))
 
                 # Event broadcasts
-                for i in range(3):
+                for _ in range(3):
                     tasks.append(
                         self.orchestrator.broadcast_event(
                             {

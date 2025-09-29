@@ -78,9 +78,9 @@ async def test_multi_agent_observation_delivery() -> None:
 
     # Verify timing accuracy (within 5ms tolerance)
     for result in results:
-        assert (
-            result["timing_error"] <= 0.005
-        ), f"Agent {result['agent_id']} timing error: {result['timing_error']}s"
+        assert result["timing_error"] <= 0.005, (
+            f"Agent {result['agent_id']} timing error: {result['timing_error']}s"
+        )
         assert result["observation"]["view_seq"] == 1
         assert len(result["observation"]["patches"]) == 1
 
@@ -119,9 +119,9 @@ async def test_high_throughput_scenario() -> None:
         assert event == f"event_{i}"
 
     # Verify throughput meets requirement (≥100 events/sec)
-    assert (
-        throughput >= 90
-    ), f"Throughput too low: {throughput} events/sec"  # Allow some tolerance
+    assert throughput >= 90, (
+        f"Throughput too low: {throughput} events/sec"
+    )  # Allow some tolerance
 
 
 @pytest.mark.asyncio

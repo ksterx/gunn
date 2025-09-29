@@ -110,8 +110,8 @@ class TestMessageFacadeIntegration:
             await facade.register_agent(agent2, test_policy)
 
             # Subscribe agents to different message types
-            sub1 = await facade.subscribe(agent1, {"type_a", "type_b"})
-            sub2 = await facade.subscribe(agent2, {"type_b", "type_c"})
+            _sub1 = await facade.subscribe(agent1, {"type_a", "type_b"})
+            _sub2 = await facade.subscribe(agent2, {"type_b", "type_c"})
 
             # Emit different message types
             await facade.emit("type_a", {"data": "message_a"}, "source1")

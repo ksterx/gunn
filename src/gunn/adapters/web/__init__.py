@@ -16,10 +16,10 @@ from gunn.adapters.web.server import (
 
 __all__ = [
     "AuthToken",
-    "WebAdapter",
-    "create_web_adapter",
     "ErrorResponse",
     "IntentRequest",
     "IntentResponse",
     "ObservationResponse",
+    "WebAdapter",
+    "create_web_adapter",
 ]

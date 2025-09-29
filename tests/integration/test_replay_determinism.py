@@ -59,9 +59,9 @@ class TestReplayDeterminism:
             ):
                 different_effects += 1
 
-        assert (
-            different_effects > 0
-        ), "Logs with different seeds should produce different effects"
+        assert different_effects > 0, (
+            "Logs with different seeds should produce different effects"
+        )
 
     @pytest.mark.asyncio
     async def test_replay_determinism_same_seed(self):
@@ -206,12 +206,12 @@ class TestReplayConsistency:
                     strict=False,
                 )
             ):
-                assert (
-                    result["global_seq"] == first_result["global_seq"]
-                ), f"Mismatch at index {i}"
-                assert (
-                    result["effect_uuid"] == first_result["effect_uuid"]
-                ), f"Mismatch at index {i}"
+                assert result["global_seq"] == first_result["global_seq"], (
+                    f"Mismatch at index {i}"
+                )
+                assert result["effect_uuid"] == first_result["effect_uuid"], (
+                    f"Mismatch at index {i}"
+                )
 
     @pytest.mark.asyncio
     async def test_replay_statistics_consistency(self):

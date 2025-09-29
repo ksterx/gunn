@@ -104,7 +104,7 @@ class TestDummyLLMAdapter:
         start_time = time.perf_counter()
 
         try:
-            async for token in adapter.generate_stream(
+            async for _token in adapter.generate_stream(
                 "test", cancel_token, max_tokens=6
             ):
                 token_times.append(time.perf_counter() - start_time)
@@ -119,9 +119,9 @@ class TestDummyLLMAdapter:
 
         # Each interval should be approximately 25ms (±10ms tolerance)
         for i, interval in enumerate(intervals):
-            assert (
-                15.0 <= interval <= 35.0
-            ), f"Token {i + 1} interval {interval}ms outside 25ms ±10ms range"
+            assert 15.0 <= interval <= 35.0, (
+                f"Token {i + 1} interval {interval}ms outside 25ms ±10ms range"
+            )
 
     @pytest.mark.asyncio
     async def test_generation_with_timing_returns_correct_metadata(self):
@@ -515,8 +515,8 @@ class TestLLMIntegrationWithOrchestrator:
         assert isinstance(results[2], tuple)  # Success
 
         # Verify the successful results
-        tokens_1, time_1, cancel_time_1 = results[0]
-        tokens_3, time_3, cancel_time_3 = results[2]
+        tokens_1, _time_1, cancel_time_1 = results[0]
+        tokens_3, _time_3, cancel_time_3 = results[2]
 
         assert len(tokens_1) > 0
         assert len(tokens_3) > 0

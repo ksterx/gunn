@@ -151,7 +151,9 @@ class TestDummyLLMAdapter:
             adapter, cancel_token, cancel_after_ms=50.0, tolerance_ms=5.0
         )
 
-        assert within_tolerance, f"Cancellation took {actual_time:.2f}ms, expected ≤{expected_tolerance:.2f}ms"
+        assert within_tolerance, (
+            f"Cancellation took {actual_time:.2f}ms, expected ≤{expected_tolerance:.2f}ms"
+        )
         assert actual_time <= 5.0  # Should be within 5ms tolerance
 
     @pytest.mark.asyncio
@@ -180,12 +182,12 @@ class TestDummyLLMAdapter:
                 tolerance_ms=100.0,
             )
 
-            assert (
-                within_tolerance
-            ), f"{test_name}: Cancellation took {actual_time:.2f}ms, exceeds 100ms SLO"
-            assert (
-                actual_time <= 100.0
-            ), f"{test_name}: Failed 100ms SLO with {actual_time:.2f}ms"
+            assert within_tolerance, (
+                f"{test_name}: Cancellation took {actual_time:.2f}ms, exceeds 100ms SLO"
+            )
+            assert actual_time <= 100.0, (
+                f"{test_name}: Failed 100ms SLO with {actual_time:.2f}ms"
+            )
 
     @pytest.mark.asyncio
     async def test_token_yield_intervals(self):
@@ -203,15 +205,15 @@ class TestDummyLLMAdapter:
 
         # Each interval should be close to 25ms (±5ms tolerance)
         for interval in intervals:
-            assert (
-                20.0 <= interval <= 30.0
-            ), f"Token interval {interval:.2f}ms outside 20-30ms range"
+            assert 20.0 <= interval <= 30.0, (
+                f"Token interval {interval:.2f}ms outside 20-30ms range"
+            )
 
         # Average should be close to configured interval (allow some system scheduling variance)
         avg_interval = sum(intervals) / len(intervals)
-        assert (
-            20.0 <= avg_interval <= 30.0
-        ), f"Average interval {avg_interval:.2f}ms not close to 25ms"
+        assert 20.0 <= avg_interval <= 30.0, (
+            f"Average interval {avg_interval:.2f}ms not close to 25ms"
+        )
 
     @pytest.mark.asyncio
     async def test_generate_with_timing(self):
@@ -284,9 +286,9 @@ class TestDummyLLMAdapter:
         cancellation_response_time = (time.perf_counter() - start_time) * 1000
 
         # Should respond to cancellation within a few milliseconds
-        assert (
-            cancellation_response_time <= 10.0
-        ), f"Cancellation during sleep took {cancellation_response_time:.2f}ms"
+        assert cancellation_response_time <= 10.0, (
+            f"Cancellation during sleep took {cancellation_response_time:.2f}ms"
+        )
 
     async def _collect_tokens(
         self, adapter: DummyLLMAdapter, cancel_token: CancelToken, tokens: list[str]

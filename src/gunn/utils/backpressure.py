@@ -7,7 +7,7 @@ and resource exhaustion scenarios with configurable strategies.
 import asyncio
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 from gunn.utils.errors import BackpressureError
 from gunn.utils.telemetry import record_backpressure_event, record_queue_high_watermark
@@ -15,7 +15,7 @@ from gunn.utils.telemetry import record_backpressure_event, record_queue_high_wa
 T = TypeVar("T")
 
 
-class BackpressurePolicy(ABC, Generic[T]):
+class BackpressurePolicy(ABC, type[T]):
     """Abstract base class for backpressure policies.
 
     Defines the interface for handling queue overflow scenarios
@@ -265,7 +265,7 @@ class BackpressureManager:
 backpressure_manager = BackpressureManager()
 
 
-class BackpressureQueue(Generic[T]):
+class BackpressureQueue(type[T]):
     """Queue with integrated backpressure policy support.
 
     A queue implementation that automatically applies backpressure

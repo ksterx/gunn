@@ -191,8 +191,8 @@ class DefaultEffectValidator:
         """
         validation_failures: list[str] = []
         current_time = time.time()
-        agent_id = intent.get("agent_id", "")
-        intent_kind = intent.get("kind", "")
+        _agent_id = intent.get("agent_id", "")
+        _intent_kind = intent.get("kind", "")
 
         try:
             # 1. Basic structure validation
@@ -462,7 +462,7 @@ class DefaultEffectValidator:
             failures.append(f"agent_not_in_world: {agent_id}")
             return failures  # Can't validate further without agent entity
 
-        agent_entity = world_state.entities[agent_id]
+        _agent_entity = world_state.entities[agent_id]
 
         # Validate based on intent kind
         if intent_kind == "Move":

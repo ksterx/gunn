@@ -196,7 +196,7 @@ class TestMessageEmission:
     @pytest.mark.asyncio
     async def test_emit_timeout(self, message_facade, mock_orchestrator):
         """Test emission timeout handling."""
-        mock_orchestrator.broadcast_event.side_effect = asyncio.TimeoutError()
+        mock_orchestrator.broadcast_event.side_effect = TimeoutError()
 
         with pytest.raises(TimeoutError, match="Message emission timed out"):
             await message_facade.emit("test_message", {"data": "test"}, "test_source")
@@ -359,7 +359,7 @@ class TestMessageRetrieval:
             await asyncio.sleep(0.1)
             await queue.put(test_message)
 
-        asyncio.create_task(add_message())
+        asyncio.create_task(add_message())  # noqa
 
         # Wait for the message
         received = await message_facade.wait_for_message(
