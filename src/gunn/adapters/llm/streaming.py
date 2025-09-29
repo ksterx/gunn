@@ -12,15 +12,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-try:
-    import anthropic
-except ImportError:
-    anthropic = None
-
-try:
-    import openai
-except ImportError:
-    openai = None
+import anthropic
+import openai
 
 from gunn.schemas.types import CancelToken
 from gunn.utils.errors import LLMGenerationError, LLMTimeoutError
@@ -120,27 +113,11 @@ class OpenAIProvider(BaseLLMProvider):
 
     def __init__(self, config: LLMConfig):
         super().__init__(config)
-        self._client = None
-        self._initialize_client()
-
-    def _initialize_client(self) -> None:
-        """Initialize OpenAI client."""
-        if openai is None:
-            self._logger.warning(
-                "OpenAI client not available. Install with: pip install openai"
-            )
-            self._client = None
-            return
-
-        try:
-            self._client = openai.AsyncOpenAI(
-                api_key=self.config.api_key,
-                base_url=self.config.api_base,
-                timeout=self.config.timeout_seconds,
-            )
-        except Exception as e:
-            self._logger.error("Failed to initialize OpenAI client", error=str(e))
-            self._client = None
+        self._client = openai.AsyncOpenAI(
+            api_key=self.config.api_key,
+            base_url=self.config.api_base,
+            timeout=self.config.timeout_seconds,
+        )
 
     async def generate_stream(
         self,
@@ -254,27 +231,11 @@ class AnthropicProvider(BaseLLMProvider):
 
     def __init__(self, config: LLMConfig):
         super().__init__(config)
-        self._client = None
-        self._initialize_client()
-
-    def _initialize_client(self) -> None:
-        """Initialize Anthropic client."""
-        if anthropic is None:
-            self._logger.warning(
-                "Anthropic client not available. Install with: pip install anthropic"
-            )
-            self._client = None
-            return
-
-        try:
-            self._client = anthropic.AsyncAnthropic(
-                api_key=self.config.api_key,
-                base_url=self.config.api_base,
-                timeout=self.config.timeout_seconds,
-            )
-        except Exception as e:
-            self._logger.error("Failed to initialize Anthropic client", error=str(e))
-            self._client = None
+        self._client = anthropic.AsyncAnthropic(
+            api_key=self.config.api_key,
+            base_url=self.config.api_base,
+            timeout=self.config.timeout_seconds,
+        )
 
     async def generate_stream(
         self,

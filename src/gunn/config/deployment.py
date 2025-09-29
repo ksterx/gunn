@@ -96,7 +96,7 @@ class HealthChecker:
         start_time = time.time()
 
         async with self._check_lock:
-            checks = {}
+            checks: dict[str, Any] = {}
             healthy = True
             ready = True
 

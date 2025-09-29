@@ -128,7 +128,7 @@ disallow_untyped_decorators = false
 disallow_subclassing_any = false
 
 [[tool.mypy.overrides]]
-module = ["requests", "yaml"]
+module = ["requests", "yaml", "psutil"]
 ignore_missing_imports = true
 
 # Pytest configuration

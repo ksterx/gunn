@@ -481,7 +481,7 @@ class DefaultEffectValidator:
         return failures
 
     def _validate_move_constraints(
-        self, agent_id: str, payload: dict, world_state: WorldState
+        self, agent_id: str, payload: dict[str, Any], world_state: WorldState
     ) -> list[str]:
         """Validate movement constraints.
 
@@ -544,7 +544,7 @@ class DefaultEffectValidator:
         return failures
 
     def _validate_interact_constraints(
-        self, agent_id: str, payload: dict, world_state: WorldState
+        self, agent_id: str, payload: dict[str, Any], world_state: WorldState
     ) -> list[str]:
         """Validate interaction constraints.
 
@@ -600,7 +600,7 @@ class DefaultEffectValidator:
         return failures
 
     def _validate_speak_constraints(
-        self, agent_id: str, payload: dict, world_state: WorldState
+        self, agent_id: str, payload: dict[str, Any], world_state: WorldState
     ) -> list[str]:
         """Validate speaking constraints.
 
@@ -633,7 +633,7 @@ class DefaultEffectValidator:
 
         return failures
 
-    def _estimate_token_usage(self, payload: dict) -> int:
+    def _estimate_token_usage(self, payload: dict[str, Any]) -> int:
         """Estimate token usage for a payload.
 
         Args:
@@ -2063,7 +2063,7 @@ class Orchestrator:
 
         # Parallel observation generation for better performance
         async def process_agent_observation(
-            agent_id: str, agent_handle
+            agent_id: str, agent_handle: AgentHandle
         ) -> tuple[str, bool]:
             try:
                 # Check if agent should observe this effect
