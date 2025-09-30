@@ -25,6 +25,7 @@ import gc
 import statistics
 import time
 import uuid
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,7 +34,7 @@ import psutil
 from gunn import Orchestrator, OrchestratorConfig
 from gunn.facades import MessageFacade, RLFacade
 from gunn.policies.observation import DefaultObservationPolicy, PolicyConfig
-from gunn.schemas.types import Intent
+from gunn.schemas.types import EffectDraft, Intent
 from gunn.utils.telemetry import get_logger, setup_logging
 
 
@@ -451,31 +452,31 @@ class PerformanceBenchmark:
                 # Intent submissions
                 for i in range(self.max_agents):
                     agent_id = f"agent_{i:03d}"
-                    intent: Intent = {
-                        "kind": "Custom",
-                        "payload": {"action": "memory_test", "data": "x" * 100},
-                        "context_seq": 0,
-                        "req_id": f"mem_{uuid.uuid4().hex[:8]}",
-                        "agent_id": agent_id,
-                        "priority": 1,
-                        "schema_version": "1.0.0",
-                    }
+                    intent = Intent(
+                        kind="Custom",
+                        payload={"action": "memory_test", "data": "x" * 100},
+                        context_seq=0,
+                        req_id=f"mem_{uuid.uuid4().hex[:8]}",
+                        agent_id=agent_id,
+                        priority=1,
+                        schema_version="1.0.0",
+                    )
 
                     task = self.rl_facade.step(agent_id, intent)
                     tasks.append(task)
 
                 # Event broadcasts
-                for _i in range(5):
+                for _ in range(5):
                     event_task = self.orchestrator.broadcast_event(
-                        {
-                            "kind": "MemoryTestEvent",
-                            "payload": {
+                        draft=EffectDraft(
+                            kind="MemoryTestEvent",
+                            payload={
                                 "data": "y" * 200,
                                 "iteration": operations_completed,
                             },
-                            "source_id": "memory_benchmark",
-                            "schema_version": "1.0.0",
-                        }
+                            source_id="memory_benchmark",
+                            schema_version="1.0.0",
+                        )
                     )
                     tasks.append(event_task)
 
@@ -639,7 +640,9 @@ class PerformanceBenchmark:
         # Force garbage collection before starting
         gc.collect()
 
-        benchmarks = [
+        benchmarks: list[
+            tuple[str, Callable[..., Coroutine[Any, Any, BenchmarkResult]], Any | None]
+        ] = [
             ("Intent Throughput", self.benchmark_intent_throughput, 15.0),
             ("Observation Latency", self.benchmark_observation_latency, 500),
             ("Cancellation Latency", self.benchmark_cancellation_latency, 50),

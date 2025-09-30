@@ -12,6 +12,7 @@ import pytest
 from gunn.core.orchestrator import (
     AgentHandle,
     DefaultEffectValidator,
+    EffectValidator,
     Orchestrator,
     OrchestratorConfig,
 )
@@ -222,9 +223,14 @@ class TestOrchestrator:
     def test_custom_effect_validator(self) -> None:
         """Test orchestrator with custom effect validator."""
 
-        class CustomValidator:
+        class CustomValidator(EffectValidator):
             def validate_intent(self, intent: Intent, world_state: WorldState) -> bool:
                 return False
+
+            def set_agent_permissions(
+                self, agent_id: str, permissions: set[str]
+            ) -> None:
+                pass
 
         config = OrchestratorConfig()
         validator = CustomValidator()
@@ -515,9 +521,14 @@ class TestOrchestrator:
         """Test intent submission with validation failure."""
 
         # Create validator that always fails
-        class FailingValidator:
+        class FailingValidator(EffectValidator):
             def validate_intent(self, intent: Intent, world_state: WorldState) -> bool:
                 return False
+
+            def set_agent_permissions(
+                self, agent_id: str, permissions: set[str]
+            ) -> None:
+                pass
 
         config = OrchestratorConfig()
         orchestrator_with_failing_validator = Orchestrator(
