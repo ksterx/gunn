@@ -70,15 +70,15 @@ class TestIntentConflictError:
 
     def test_initialization(self) -> None:
         """Test intent conflict error initialization."""
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 10,
-            "req_id": "req_123",
-            "agent_id": "agent_1",
-            "priority": 1,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=10,
+            req_id="req_123",
+            agent_id="agent_1",
+            priority=1,
+            schema_version="1.0.0",
+        )
 
         effects: list[Effect] = [
             {
@@ -231,15 +231,15 @@ class TestValidationError:
 
     def test_initialization(self) -> None:
         """Test validation error initialization."""
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 10,
-            "req_id": "req_123",
-            "agent_id": "agent_1",
-            "priority": 1,
-            "schema_version": "1.0.0",
-        }
+        intent: Intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=10,
+            req_id="req_123",
+            agent_id="agent_1",
+            priority=1,
+            schema_version="1.0.0",
+        )
 
         failures = ["Invalid payload format", "Missing required field"]
         error = ValidationError(intent, failures)
@@ -250,15 +250,15 @@ class TestValidationError:
 
     def test_message_format(self) -> None:
         """Test error message includes all failures."""
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 10,
-            "req_id": "req_123",
-            "agent_id": "agent_1",
-            "priority": 1,
-            "schema_version": "1.0.0",
-        }
+        intent: Intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=10,
+            req_id="req_123",
+            agent_id="agent_1",
+            priority=1,
+            schema_version="1.0.0",
+        )
 
         failures = ["Invalid payload format", "Missing required field"]
         error = ValidationError(intent, failures)
@@ -527,15 +527,15 @@ class TestErrorRecoveryPolicy:
     def test_handle_intent_conflict(self):
         """Test intent conflict error handling."""
         policy = ErrorRecoveryPolicy()
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 10,
-            "req_id": "req_123",
-            "agent_id": "agent_1",
-            "priority": 1,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=10,
+            req_id="req_123",
+            agent_id="agent_1",
+            priority=1,
+            schema_version="1.0.0",
+        )
         error = IntentConflictError(intent, [])
 
         action = policy.handle_intent_conflict(error)
@@ -570,15 +570,15 @@ class TestErrorRecoveryPolicy:
     def test_handle_validation(self):
         """Test validation error handling."""
         policy = ErrorRecoveryPolicy()
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 10,
-            "req_id": "req_123",
-            "agent_id": "agent_1",
-            "priority": 1,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=10,
+            req_id="req_123",
+            agent_id="agent_1",
+            priority=1,
+            schema_version="1.0.0",
+        )
         error = ValidationError(intent, ["Invalid format"])
 
         action = policy.handle_validation(error)

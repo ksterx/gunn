@@ -57,28 +57,28 @@ class TestErrorHandlingIntegration:
         # Fill queue to trigger backpressure
         intents = []
         for i in range(orchestrator.config.max_queue_depth):
-            intent: Intent = {
-                "kind": "Speak",
-                "payload": {"text": f"Message {i}"},
-                "context_seq": 1,
-                "req_id": f"req_{i}",
-                "agent_id": "test_agent",
-                "priority": 0,
-                "schema_version": "1.0.0",
-            }
+            intent = Intent(
+                kind="Speak",
+                payload={"text": f"Message {i}"},
+                context_seq=1,
+                req_id=f"req_{i}",
+                agent_id="test_agent",
+                priority=0,
+                schema_version="1.0.0",
+            )
             intents.append(intent)
             await orchestrator.submit_intent(intent)
 
         # Next intent should trigger backpressure
-        overflow_intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Overflow message"},
-            "context_seq": 1,
-            "req_id": "overflow_req",
-            "agent_id": "test_agent",
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        overflow_intent = Intent(
+            kind="Speak",
+            payload={"text": "Overflow message"},
+            context_seq=1,
+            req_id="overflow_req",
+            agent_id="test_agent",
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         with pytest.raises(BackpressureError) as exc_info:
             await orchestrator.submit_intent(overflow_intent)
@@ -210,16 +210,16 @@ class TestErrorHandlingIntegration:
 
         # Test non-retryable error
         abort_error = ValidationError(
-            {
-                "kind": "Speak",
-                "payload": {"text": "Hello"},
-                "context_seq": 10,
-                "req_id": "req_123",
-                "agent_id": "agent_1",
-                "priority": 1,
-                "schema_version": "1.0.0",
-            },
-            ["Invalid format"],
+            intent=Intent(
+                kind="Speak",
+                payload={"text": "Hello"},
+                context_seq=10,
+                req_id="req_123",
+                agent_id="agent_1",
+                priority=1,
+                schema_version="1.0.0",
+            ),
+            validation_failures=["Invalid format"],
         )
         assert not policy.should_retry(abort_error, 0)
 
@@ -284,15 +284,15 @@ class TestErrorHandlingIntegration:
         assert stale_error.staleness == 5
 
         # Test IntentConflictError
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 10,
-            "req_id": "req_123",
-            "agent_id": "agent_1",
-            "priority": 1,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=10,
+            req_id="req_123",
+            agent_id="agent_1",
+            priority=1,
+            schema_version="1.0.0",
+        )
         conflict_error = IntentConflictError(intent, [])
         assert (
             policy.handle_intent_conflict(conflict_error)

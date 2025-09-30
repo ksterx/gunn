@@ -7,7 +7,7 @@ token generation with proper cancellation handling and error recovery.
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -81,7 +81,7 @@ class BaseLLMProvider(ABC):
         self,
         request: GenerationRequest,
         cancel_token: CancelToken,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncIterator[str]:
         """Generate streaming tokens with cancellation support.
 
         Args:
@@ -123,7 +123,7 @@ class OpenAIProvider(BaseLLMProvider):
         self,
         request: GenerationRequest,
         cancel_token: CancelToken,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncIterator[str]:
         """Generate streaming tokens using OpenAI API."""
         if not self._client:
             raise LLMGenerationError("OpenAI client not initialized")
@@ -241,7 +241,7 @@ class AnthropicProvider(BaseLLMProvider):
         self,
         request: GenerationRequest,
         cancel_token: CancelToken,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncIterator[str]:
         """Generate streaming tokens using Anthropic API."""
         if not self._client:
             raise LLMGenerationError("Anthropic client not initialized")
@@ -369,7 +369,7 @@ class StreamingLLMAdapter:
         self,
         request: GenerationRequest,
         cancel_token: CancelToken,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncIterator[str]:
         """Generate streaming tokens with cancellation support.
 
         Args:

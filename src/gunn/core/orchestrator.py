@@ -65,6 +65,15 @@ class EffectValidator(Protocol):
         """
         ...
 
+    def set_agent_permissions(self, agent_id: str, permissions: set[str]) -> None:
+        """Set permissions for an agent.
+
+        Args:
+            agent_id: Agent identifier
+            permissions: Set of permission strings
+        """
+        ...
+
 
 class DefaultEffectValidator:
     """Default implementation of EffectValidator with comprehensive validation.

@@ -56,15 +56,15 @@ class TestErrorRecoveryScenarios:
         backpressure_count = 0
 
         for i in range(15):  # More than quota_intents_per_minute (10)
-            intent: Intent = {
-                "kind": "Speak",
-                "payload": {"text": f"Message {i}"},
-                "context_seq": 1,
-                "req_id": f"quota_req_{i}",
-                "agent_id": "quota_test_agent",
-                "priority": 0,
-                "schema_version": "1.0.0",
-            }
+            intent = Intent(
+                kind="Speak",
+                payload={"text": f"Message {i}"},
+                context_seq=1,
+                req_id=f"quota_req_{i}",
+                agent_id="quota_test_agent",
+                priority=0,
+                schema_version="1.0.0",
+            )
 
             try:
                 await orchestrator.submit_intent(intent)
@@ -274,15 +274,15 @@ class TestErrorRecoveryScenarios:
         stale_error = StaleContextError("req_1", 10, 15)
         assert policy.handle_stale_context(stale_error) == RecoveryAction.REGENERATE
 
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 10,
-            "req_id": "req_123",
-            "agent_id": "agent_1",
-            "priority": 1,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=10,
+            req_id="req_123",
+            agent_id="agent_1",
+            priority=1,
+            schema_version="1.0.0",
+        )
 
         from gunn.utils.errors import (
             CircuitBreakerOpenError,
@@ -338,15 +338,15 @@ class TestErrorRecoveryScenarios:
             """Submit multiple intents for an agent."""
             results = []
             for i in range(intent_count):
-                intent: Intent = {
-                    "kind": "Speak",
-                    "payload": {"text": f"Message {i} from {agent_id}"},
-                    "context_seq": 1,
-                    "req_id": f"{agent_id}_req_{i}",
-                    "agent_id": agent_id,
-                    "priority": 0,
-                    "schema_version": "1.0.0",
-                }
+                intent = Intent(
+                    kind="Speak",
+                    payload={"text": f"Message {i} from {agent_id}"},
+                    context_seq=1,
+                    req_id=f"{agent_id}_req_{i}",
+                    agent_id=agent_id,
+                    priority=0,
+                    schema_version="1.0.0",
+                )
 
                 try:
                     req_id = await orchestrator.submit_intent(intent)

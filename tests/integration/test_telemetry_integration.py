@@ -124,15 +124,15 @@ class TestTelemetryIntegration:
         await orchestrator.register_agent("test_agent", observation_policy)
 
         # Submit an intent
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello world"},
-            "context_seq": 0,
-            "req_id": "test_req_1",
-            "agent_id": "test_agent",
-            "priority": 10,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello world"},
+            context_seq=0,
+            req_id="test_req_1",
+            agent_id="test_agent",
+            priority=10,
+            schema_version="1.0.0",
+        )
 
         req_id = await orchestrator.submit_intent(intent)
         assert req_id == "test_req_1"
@@ -150,12 +150,12 @@ class TestTelemetryIntegration:
         await orchestrator.register_agent("test_agent", observation_policy)
 
         # Broadcast an event
-        effect_draft: EffectDraft = {
-            "kind": "MessageEmitted",
-            "payload": {"text": "Test message"},
-            "source_id": "test_agent",
-            "schema_version": "1.0.0",
-        }
+        effect_draft = EffectDraft(
+            kind="MessageEmitted",
+            payload={"text": "Test message"},
+            source_id="test_agent",
+            schema_version="1.0.0",
+        )
 
         await orchestrator.broadcast_event(effect_draft)
 
@@ -188,12 +188,12 @@ class TestTelemetryIntegration:
             )
 
             # Broadcast an event
-            effect_draft: EffectDraft = {
-                "kind": "MessageEmitted",
-                "payload": {"text": "Test message"},
-                "source_id": "test_agent",
-                "schema_version": "1.0.0",
-            }
+            effect_draft = EffectDraft(
+                kind="MessageEmitted",
+                payload={"text": "Test message"},
+                source_id="test_agent",
+                schema_version="1.0.0",
+            )
 
             await orchestrator.broadcast_event(effect_draft)
 
@@ -245,25 +245,25 @@ class TestTelemetryIntegration:
 
             for i in range(10):
                 # Submit intents
-                intent: Intent = {
-                    "kind": "Speak",
-                    "payload": {"text": f"Message {i}"},
-                    "context_seq": i,
-                    "req_id": f"test_req_{i}",
-                    "agent_id": "test_agent",
-                    "priority": 10,
-                    "schema_version": "1.0.0",
-                }
+                intent = Intent(
+                    kind="Speak",
+                    payload={"text": f"Message {i}"},
+                    context_seq=i,
+                    req_id=f"test_req_{i}",
+                    agent_id="test_agent",
+                    priority=10,
+                    schema_version="1.0.0",
+                )
 
                 await orchestrator.submit_intent(intent)
 
                 # Broadcast events
-                effect_draft: EffectDraft = {
-                    "kind": "MessageEmitted",
-                    "payload": {"text": f"Event {i}"},
-                    "source_id": "test_agent",
-                    "schema_version": "1.0.0",
-                }
+                effect_draft = EffectDraft(
+                    kind="MessageEmitted",
+                    payload={"text": f"Event {i}"},
+                    source_id="test_agent",
+                    schema_version="1.0.0",
+                )
 
                 await orchestrator.broadcast_event(effect_draft)
 
@@ -289,28 +289,28 @@ class TestTelemetryIntegration:
 
         # Submit an invalid intent (missing required field)
         with pytest.raises(ValueError):
-            invalid_intent: Intent = {
-                "kind": "Speak",
-                "payload": {"text": "Hello"},
-                "context_seq": 0,
+            invalid_intent = Intent(
+                kind="Speak",
+                payload={"text": "Hello"},
+                context_seq=0,
                 # Missing req_id
-                "agent_id": "test_agent",
-                "priority": 10,
-                "schema_version": "1.0.0",
-            }
+                agent_id="test_agent",
+                priority=10,
+                schema_version="1.0.0",
+            )
             await orchestrator.submit_intent(invalid_intent)
 
         # Submit a stale intent
         with pytest.raises(Exception):  # noqa: B017
-            stale_intent: Intent = {
-                "kind": "Speak",
-                "payload": {"text": "Hello"},
-                "context_seq": -1000,  # Very stale
-                "req_id": "stale_req",
-                "agent_id": "test_agent",
-                "priority": 10,
-                "schema_version": "1.0.0",
-            }
+            stale_intent = Intent(
+                kind="Speak",
+                payload={"text": "Hello"},
+                context_seq=-1000,  # Very stale
+                req_id="stale_req",
+                agent_id="test_agent",
+                priority=10,
+                schema_version="1.0.0",
+            )
             await orchestrator.submit_intent(stale_intent)
 
     def test_metrics_collection(self):

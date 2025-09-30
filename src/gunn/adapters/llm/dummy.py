@@ -161,7 +161,7 @@ class DummyLLMAdapter:
                 for _ in range(sleep_chunks):
                     if cancel_token.cancelled:
                         # Final cancellation check during sleep
-                        elapsed_ms = (time.perf_counter() - start_time) * 1000  # type: ignore
+                        elapsed_ms = (time.perf_counter() - start_time) * 1000
                         self._logger.info(
                             "Generation cancelled during sleep",
                             req_id=cancel_token.req_id,
@@ -314,7 +314,7 @@ class CancellationTestHelper:
                 current_time = time.perf_counter()
 
                 if last_token_time is not None:
-                    interval_ms = (current_time - last_token_time) * 1000  # type: ignore
+                    interval_ms = (current_time - last_token_time) * 1000
                     intervals.append(interval_ms)
 
                 last_token_time = current_time

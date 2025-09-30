@@ -220,15 +220,15 @@ class TestCancellationAndStaleness:
         token = orchestrator.issue_cancel_token("agent_1", "req_1")
 
         # Create effect from different agent
-        effect: Effect = {
-            "uuid": "test_uuid",
-            "kind": "TestEffect",
-            "payload": {},
-            "global_seq": 10,
-            "sim_time": 1.0,
-            "source_id": "agent_2",  # Different agent
-            "schema_version": "1.0.0",
-        }
+        effect = Effect(
+            uuid="test_uuid",
+            kind="TestEffect",
+            payload={},
+            global_seq=10,
+            sim_time=1.0,
+            source_id="agent_2",  # Different agent
+            schema_version="1.0.0",
+        )
 
         # Check for stale tokens
         cancelled_req_ids = await orchestrator.check_and_cancel_stale_tokens(effect)
@@ -250,15 +250,15 @@ class TestCancellationAndStaleness:
         token = orchestrator.issue_cancel_token("agent_1", "req_1")
 
         # Create effect from same agent (should not trigger cancellation)
-        effect_same_agent: Effect = {
-            "uuid": "test_uuid_1",
-            "kind": "TestEffect",
-            "payload": {},
-            "global_seq": 10,
-            "sim_time": 1.0,
-            "source_id": "agent_1",  # Same agent
-            "schema_version": "1.0.0",
-        }
+        effect_same_agent = Effect(
+            uuid="test_uuid_1",
+            kind="TestEffect",
+            payload={},
+            global_seq=10,
+            sim_time=1.0,
+            source_id="agent_1",  # Same agent
+            schema_version="1.0.0",
+        )
 
         cancelled_req_ids = await orchestrator.check_and_cancel_stale_tokens(
             effect_same_agent
@@ -267,15 +267,15 @@ class TestCancellationAndStaleness:
         assert not token.cancelled
 
         # Create effect from different agent (should trigger cancellation)
-        effect_different_agent: Effect = {
-            "uuid": "test_uuid_2",
-            "kind": "TestEffect",
-            "payload": {},
-            "global_seq": 15,
-            "sim_time": 2.0,
-            "source_id": "agent_2",  # Different agent
-            "schema_version": "1.0.0",
-        }
+        effect_different_agent = Effect(
+            uuid="test_uuid_2",
+            kind="TestEffect",
+            payload={},
+            global_seq=15,
+            sim_time=2.0,
+            source_id="agent_2",  # Different agent
+            schema_version="1.0.0",
+        )
 
         cancelled_req_ids = await orchestrator.check_and_cancel_stale_tokens(
             effect_different_agent
@@ -341,12 +341,12 @@ class TestCancellationAndStaleness:
 
         # Broadcast event that should trigger cancellation
         # This will create an effect with global_seq = 1
-        effect_draft: EffectDraft = {
-            "kind": "TestEvent",
-            "payload": {"test": "data"},
-            "source_id": "agent_2",
-            "schema_version": "1.0.0",
-        }
+        effect_draft = EffectDraft(
+            kind="TestEvent",
+            payload={"test": "data"},
+            source_id="agent_2",
+            schema_version="1.0.0",
+        )
 
         await orchestrator.broadcast_event(effect_draft)
 
@@ -395,15 +395,15 @@ class TestCancellationAndStaleness:
         token2 = orchestrator.issue_cancel_token("agent_2", "req_2")
 
         # Create effect that should trigger cancellation for both
-        effect: Effect = {
-            "uuid": "test_uuid",
-            "kind": "TestEffect",
-            "payload": {},
-            "global_seq": 15,
-            "sim_time": 1.0,
-            "source_id": "agent_3",
-            "schema_version": "1.0.0",
-        }
+        effect = Effect(
+            uuid="test_uuid",
+            kind="TestEffect",
+            payload={},
+            global_seq=15,
+            sim_time=1.0,
+            source_id="agent_3",
+            schema_version="1.0.0",
+        )
 
         cancelled_req_ids = await orchestrator.check_and_cancel_stale_tokens(effect)
 

@@ -154,7 +154,7 @@ def test_hash_chain_tamper_detection():
 
     # 1. Modify event data
     tampered_chain_1 = legitimate_chain.copy()
-    tampered_chain_1[1]["effect"]["file"] = "secret.txt"  # type: ignore
+    tampered_chain_1[1]["effect"]["file"] = "secret.txt"
     assert validate_hash_chain(tampered_chain_1) is False
 
     # 2. Insert malicious event
@@ -172,7 +172,7 @@ def test_hash_chain_tamper_detection():
             "effect": malicious_event,
             "checksum": chain_checksum(
                 malicious_event,
-                legitimate_chain[1]["checksum"],  # type: ignore
+                legitimate_chain[1]["checksum"],
             ),
         },
     )
@@ -189,7 +189,7 @@ def test_hash_chain_tamper_detection():
             "effect": new_event,
             "checksum": chain_checksum(
                 new_event,
-                legitimate_chain[0]["checksum"],  # type: ignore
+                legitimate_chain[0]["checksum"],
             ),  # Wrong prev checksum
         }
     )
@@ -227,7 +227,7 @@ def test_large_scale_integrity():
     assert integrity_report["total_entries"] == 1000
 
     # Introduce corruption in the middle
-    large_chain[500]["effect"]["data"] = "corrupted_data"  # type: ignore
+    large_chain[500]["effect"]["data"] = "corrupted_data"
 
     # Should detect corruption
     corruption_indices = detect_corruption(large_chain)
@@ -270,8 +270,8 @@ def test_unicode_and_special_characters():
         # Regenerate checksum multiple times
         for _ in range(5):
             regenerated = chain_checksum(
-                effect,  # type: ignore
-                prev_checksum if int(entry["global_seq"]) > 1 else None,  # type: ignore
+                effect,
+                prev_checksum if int(entry["global_seq"]) > 1 else None,
             )
             assert regenerated == stored_checksum
 
@@ -280,10 +280,10 @@ def test_unicode_and_special_characters():
 
 if __name__ == "__main__":
     # Run integration tests
-    test_requirement_7_1_hash_chain_integrity()  # type: ignore
-    test_requirement_7_5_corruption_detection()  # type: ignore
-    test_canonical_json_deterministic_ordering()  # type: ignore
-    test_hash_chain_tamper_detection()  # type: ignore
-    test_large_scale_integrity()  # type: ignore
-    test_unicode_and_special_characters()  # type: ignore
+    test_requirement_7_1_hash_chain_integrity()
+    test_requirement_7_5_corruption_detection()
+    test_canonical_json_deterministic_ordering()
+    test_hash_chain_tamper_detection()
+    test_large_scale_integrity()
+    test_unicode_and_special_characters()
     print("All integration tests passed!")

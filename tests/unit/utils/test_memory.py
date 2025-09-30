@@ -526,15 +526,15 @@ async def test_memory_manager_integration():
 
     # Add many effects to trigger compaction
     for i in range(60):
-        effect: Effect = {
-            "uuid": f"uuid_{i}",
-            "kind": "TestEffect",
-            "payload": {"index": i},
-            "source_id": "test",
-            "schema_version": "1.0.0",
-            "sim_time": float(i),
-            "global_seq": i + 1,
-        }
+        effect = Effect(
+            uuid=f"uuid_{i}",
+            kind="TestEffect",
+            payload={"index": i},
+            source_id="test",
+            schema_version="1.0.0",
+            sim_time=float(i),
+            global_seq=i + 1,
+        )
 
         await event_log.append(effect)
 

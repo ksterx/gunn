@@ -27,7 +27,7 @@ from typing import Any
 from gunn import Orchestrator, OrchestratorConfig
 from gunn.facades import MessageFacade, RLFacade
 from gunn.policies.observation import ConversationObservationPolicy, PolicyConfig
-from gunn.schemas.types import EffectDraft, Intent
+from gunn.schemas.types import CancelToken, EffectDraft, Intent
 from gunn.utils.telemetry import get_logger, setup_logging
 
 
@@ -40,7 +40,7 @@ class ConversationAgent:
         self.facade = facade
         self.logger = get_logger(f"agent.{agent_id}")
         self.generation_active = False
-        self.current_cancel_token = None
+        self.current_cancel_token: CancelToken | None = None
 
     async def start_conversation(self) -> None:
         """Start the conversation loop for this agent."""
@@ -210,6 +210,7 @@ class ABCConversationDemo:
         self.orchestrator = Orchestrator(self.config, world_id="abc_conversation")
 
         # Create facade
+        self.facade: MessageFacade | RLFacade
         if use_message_facade:
             self.facade = MessageFacade(orchestrator=self.orchestrator)
         else:

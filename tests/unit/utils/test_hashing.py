@@ -231,7 +231,7 @@ class TestDetectCorruption:
             {"effect": {"kind": "test"}},  # missing checksum
         ]
 
-        corrupted = detect_corruption(entries)  # type: ignore
+        corrupted = detect_corruption(entries)
         assert corrupted == [0, 1]
 
     def test_empty_list(self):
