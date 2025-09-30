@@ -1061,7 +1061,10 @@ class Orchestrator:
         self._logger.info("Sim time authority changed", authority=authority)
 
     async def register_agent(
-        self, agent_id: str, policy: ObservationPolicy, permissions: set[str] | None = None
+        self,
+        agent_id: str,
+        policy: ObservationPolicy,
+        permissions: set[str] | None = None,
     ) -> AgentHandle:
         """Register a new agent with observation policy and permissions.
 
@@ -1104,7 +1107,7 @@ class Orchestrator:
                 "intent:move",
                 "intent:speak",
                 "intent:interact",
-                "intent:custom"
+                "intent:custom",
             }
 
         self.effect_validator.set_agent_permissions(agent_id, permissions)
@@ -1950,7 +1953,11 @@ class Orchestrator:
                     if len(position) == 2:
                         position = [float(position[0]), float(position[1]), 0.0]
                     elif len(position) >= 3:
-                        position = [float(position[0]), float(position[1]), float(position[2])]
+                        position = [
+                            float(position[0]),
+                            float(position[1]),
+                            float(position[2]),
+                        ]
                     else:
                         position = None
 

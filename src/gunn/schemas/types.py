@@ -12,33 +12,19 @@ class Intent(TypedDict):
     """
 
     kind: Annotated[
-        Literal["Speak", "Move", "Interact", "Custom"],
-        "Type of action to perform"
+        Literal["Speak", "Move", "Interact", "Custom"], "Type of action to perform"
     ]
     payload: Annotated[
-        dict[str, Any],
-        "Action-specific data (e.g., {'to': [x,y,z]} for Move)"
+        dict[str, Any], "Action-specific data (e.g., {'to': [x,y,z]} for Move)"
     ]
     context_seq: Annotated[
         int,
-        "Agent's view sequence when this intent was created (for staleness detection)"
+        "Agent's view sequence when this intent was created (for staleness detection)",
     ]
-    req_id: Annotated[
-        str,
-        "Unique request identifier for tracking and deduplication"
-    ]
-    agent_id: Annotated[
-        str,
-        "ID of the agent submitting this intent"
-    ]
-    priority: Annotated[
-        int,
-        "Processing priority (higher numbers = higher priority)"
-    ]
-    schema_version: Annotated[
-        str,
-        "Schema version for compatibility (e.g., '1.0.0')"
-    ]
+    req_id: Annotated[str, "Unique request identifier for tracking and deduplication"]
+    agent_id: Annotated[str, "ID of the agent submitting this intent"]
+    priority: Annotated[int, "Processing priority (higher numbers = higher priority)"]
+    schema_version: Annotated[str, "Schema version for compatibility (e.g., '1.0.0')"]
 
 
 class EffectDraft(TypedDict):
@@ -48,76 +34,35 @@ class EffectDraft(TypedDict):
     want to broadcast events. The Orchestrator completes it with timing and sequence info.
     """
 
-    kind: Annotated[
-        str,
-        "Type of effect (e.g., 'Move', 'Speak', 'EnvironmentChanged')"
-    ]
-    payload: Annotated[
-        dict[str, Any],
-        "Effect-specific data"
-    ]
-    source_id: Annotated[
-        str,
-        "ID of the system/agent that created this effect"
-    ]
-    schema_version: Annotated[
-        str,
-        "Schema version for compatibility"
-    ]
+    kind: Annotated[str, "Type of effect (e.g., 'Move', 'Speak', 'EnvironmentChanged')"]
+    payload: Annotated[dict[str, Any], "Effect-specific data"]
+    source_id: Annotated[str, "ID of the system/agent that created this effect"]
+    schema_version: Annotated[str, "Schema version for compatibility"]
 
 
 class Effect(TypedDict):
     """Complete effect with all fields filled by Orchestrator."""
 
-    uuid: Annotated[
-        str,
-        "Unique ID for ordering tie-breaker"
-    ]
-    kind: Annotated[
-        str,
-        "Type of effect (e.g., 'Move', 'Speak', 'EnvironmentChanged')"
-    ]
-    payload: Annotated[
-        dict[str, Any],
-        "Effect-specific data"
-    ]
-    global_seq: Annotated[
-        int,
-        "Global sequence number for deterministic ordering"
-    ]
-    sim_time: Annotated[
-        float,
-        "Simulation time when this effect occurred"
-    ]
-    source_id: Annotated[
-        str,
-        "ID of the system/agent that created this effect"
-    ]
-    schema_version: Annotated[
-        str,
-        "Semantic versioning (e.g., '1.0.0')"
-    ]
+    uuid: Annotated[str, "Unique ID for ordering tie-breaker"]
+    kind: Annotated[str, "Type of effect (e.g., 'Move', 'Speak', 'EnvironmentChanged')"]
+    payload: Annotated[dict[str, Any], "Effect-specific data"]
+    global_seq: Annotated[int, "Global sequence number for deterministic ordering"]
+    sim_time: Annotated[float, "Simulation time when this effect occurred"]
+    source_id: Annotated[str, "ID of the system/agent that created this effect"]
+    schema_version: Annotated[str, "Semantic versioning (e.g., '1.0.0')"]
 
 
 class ObservationDelta(TypedDict):
     """RFC6902 JSON Patch operations for incremental view updates."""
 
-    view_seq: Annotated[
-        int,
-        "Sequence number of the view this delta updates to"
-    ]
+    view_seq: Annotated[int, "Sequence number of the view this delta updates to"]
     patches: Annotated[
-        list[dict[str, Any]],
-        "RFC6902 JSON Patch operations with stable paths"
+        list[dict[str, Any]], "RFC6902 JSON Patch operations with stable paths"
     ]
     context_digest: Annotated[
-        str,
-        "Hash digest of the resulting view state for integrity checking"
+        str, "Hash digest of the resulting view state for integrity checking"
     ]
-    schema_version: Annotated[
-        str,
-        "Schema version for compatibility"
-    ]
+    schema_version: Annotated[str, "Schema version for compatibility"]
 
 
 class CancelToken:
