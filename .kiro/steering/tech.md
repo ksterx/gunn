@@ -63,3 +63,21 @@ uv run python -m gunn replay --help
 - Effect validation currently uses `DefaultEffectValidator` (allow-all) until Task 6 introduces domain checks.
 - OpenTelemetry exporters are present but not yet initialised; integrate once adapters emit spans.
 - RL/message facades and external adapters will start consuming FastAPI/websockets dependencies as the roadmap progresses.
+
+## Type Hints
+
+- Use modern type hints. Do NOT use typing.Optional, typing.Union, typing.List, and etc. Use X | None, X | Y, list and etc instead.
+- Use generic patterns.
+  e.g.
+  ```
+  def mymap[T, U](collection: Iterable[T], f: Callable[[T], U]) -> Generator[U, None, None]:
+    yield from (f(e) for e in collection)
+
+    class MyFunction[T, U]():
+        def __init__(self, f: Callable[[T], U]):
+            self.f = f
+
+        def __call__(self, x: T) -> U:
+            return self.f(x)
+  ```
+  Do NOT use TypeAlias, TypeVar or Generic.
