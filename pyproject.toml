@@ -157,7 +157,28 @@ exclude_lines = [
 ]
 
 [dependency-groups]
-demo = ["matplotlib>=3.10.6"]
+demo = [
+    # FastAPI backend dependencies
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "websockets>=12.0",
+    
+    # Pygame frontend dependencies  
+    "pygame>=2.5.0",
+    
+    # OpenAI integration
+    "openai>=1.109.1",
+    
+    # Additional demo utilities
+    "matplotlib>=3.10.6",
+    "numpy>=1.24.0",
+    "pillow>=10.0.0",
+    
+    # HTTP client for frontend-backend communication
+    "httpx>=0.28.1",
+    "aiohttp>=3.9.0",
+]
+
 dev = [
     "pre-commit>=4.3.0",
     "pytest>=8.4.2",

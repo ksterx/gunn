@@ -8,8 +8,15 @@ and observation distribution with deterministic ordering.
 import asyncio
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal, Protocol
 
+from gunn.core.concurrent_processor import (
+    BatchResult,
+    ConcurrentIntentProcessor,
+    ConcurrentProcessingConfig,
+    ProcessingMode,
+)
 from gunn.core.event_log import EventLog
 from gunn.policies.observation import ObservationPolicy
 from gunn.schemas.messages import WorldState
@@ -73,6 +80,10 @@ class EffectValidator(Protocol):
             permissions: Set of permission strings
         """
         ...
+
+
+# Type alias for effect handler functions
+EffectHandler = Callable[[Effect, WorldState], Awaitable[None]]
 
 
 class DefaultEffectValidator:
@@ -500,6 +511,9 @@ class DefaultEffectValidator:
     ) -> list[str]:
         """Validate movement constraints.
 
+        Validates payload structure and movement feasibility for Move intents.
+        Expected payload: {"to": [x, y, z]} or {"position": [x, y, z]} (legacy)
+
         Args:
             agent_id: Agent attempting to move
             payload: Move intent payload
@@ -517,10 +531,22 @@ class DefaultEffectValidator:
 
         current_pos = world_state.spatial_index[agent_id]
 
-        # Validate target position format (support both 2D and 3D)
-        target = payload.get("to")
-        if not target or not isinstance(target, (list, tuple)) or len(target) < 2:
-            failures.append("invalid_target_position_format")
+        # Validate target position format (support both "to" and "position" fields)
+        target = payload.get("to") or payload.get("position")
+        if not target:
+            failures.append(
+                "missing_target_position: expected 'to' or 'position' field"
+            )
+            return failures
+
+        if not isinstance(target, (list, tuple)):
+            failures.append("invalid_target_position_type: must be list or tuple")
+            return failures
+
+        if len(target) < 2:
+            failures.append(
+                "invalid_target_position_format: must have at least 2 elements"
+            )
             return failures
 
         try:
@@ -533,7 +559,9 @@ class DefaultEffectValidator:
                 failures.append("invalid_target_position_format")
                 return failures
         except (ValueError, TypeError):
-            failures.append("invalid_target_position_values")
+            failures.append(
+                "invalid_target_position_values: coordinates must be numeric"
+            )
             return failures
 
         # Check movement distance (simple constraint)
@@ -570,6 +598,9 @@ class DefaultEffectValidator:
     ) -> list[str]:
         """Validate interaction constraints.
 
+        Validates payload structure and interaction feasibility for Interact intents.
+        Expected payload: {"target_id": str, "interaction_type": str | None, "data": dict | None}
+
         Args:
             agent_id: Agent attempting to interact
             payload: Interact intent payload
@@ -580,9 +611,14 @@ class DefaultEffectValidator:
         """
         failures = []
 
-        target_id = payload.get("target")
+        # Accept both "target_id" and "target" fields for backward compatibility
+        target_id = payload.get("target_id") or payload.get("target")
         if not target_id:
-            failures.append("missing_interaction_target")
+            failures.append("missing_target: expected 'target_id' or 'target' field")
+            return failures
+
+        if not isinstance(target_id, str):
+            failures.append("invalid_target_type: must be string")
             return failures
 
         # Check if target exists
@@ -609,15 +645,24 @@ class DefaultEffectValidator:
                     f"interaction_target_too_far: {distance:.2f} > {max_interact_distance}"
                 )
 
-        # Check interaction type constraints
-        interaction_type = payload.get("type", "")
-        if interaction_type and interaction_type not in [
-            "examine",
-            "use",
-            "talk",
-            "trade",
-        ]:
-            failures.append(f"invalid_interaction_type: {interaction_type}")
+        # Validate interaction_type if present
+        interaction_type = payload.get("interaction_type") or payload.get("type")
+        if interaction_type is not None:
+            if not isinstance(interaction_type, str):
+                failures.append("invalid_interaction_type: must be string")
+            elif interaction_type and interaction_type not in [
+                "examine",
+                "use",
+                "talk",
+                "trade",
+                "pickup",
+            ]:
+                failures.append(f"unknown_interaction_type: {interaction_type}")
+
+        # Validate data field if present
+        data = payload.get("data")
+        if data is not None and not isinstance(data, dict):
+            failures.append("invalid_data_type: must be dictionary")
 
         return failures
 
@@ -625,6 +670,9 @@ class DefaultEffectValidator:
         self, agent_id: str, payload: dict[str, Any], world_state: WorldState
     ) -> list[str]:
         """Validate speaking constraints.
+
+        Validates payload structure and message content for Speak intents.
+        Expected payload: {"text": str, "channel": str | None, "target_id": str | None}
 
         Args:
             agent_id: Agent attempting to speak
@@ -636,15 +684,43 @@ class DefaultEffectValidator:
         """
         failures = []
 
-        message = payload.get("message")
-        if message is None or not isinstance(message, str) or not message.strip():
-            failures.append("missing_or_invalid_message")
+        # Accept both "text" and "message" fields for backward compatibility
+        message = payload.get("text") or payload.get("message")
+        if message is None:
+            failures.append("missing_message: expected 'text' or 'message' field")
+            return failures
+
+        if not isinstance(message, str):
+            failures.append("invalid_message_type: must be string")
+            return failures
+
+        if not message.strip():
+            failures.append("empty_message: message cannot be empty or whitespace-only")
             return failures
 
         # Check message length
         max_message_length = 1000  # Configurable constraint
         if len(message) > max_message_length:
             failures.append(f"message_too_long: {len(message)} > {max_message_length}")
+
+        # Validate channel field if present
+        channel = payload.get("channel")
+        if channel is not None:
+            valid_channels = ["public", "team", "private"]
+            if channel not in valid_channels:
+                failures.append(f"invalid_channel: must be one of {valid_channels}")
+
+            # Private channel requires target_id
+            if channel == "private" and not payload.get("target_id"):
+                failures.append("missing_target_id: required for private channel")
+
+        # Validate target_id if present
+        target_id = payload.get("target_id")
+        if target_id is not None:
+            if not isinstance(target_id, str) or not target_id.strip():
+                failures.append("invalid_target_id: must be non-empty string")
+            elif target_id not in world_state.entities:
+                failures.append(f"target_not_found: {target_id} does not exist")
 
         # Check for prohibited content (simplified)
         prohibited_words = ["spam", "abuse"]  # Configurable list
@@ -845,6 +921,8 @@ class OrchestratorConfig:
         max_snapshots: int = 10,
         memory_check_interval_seconds: float = 60.0,
         auto_compaction_enabled: bool = True,
+        # Concurrent processing settings
+        concurrent_processing_config: ConcurrentProcessingConfig | None = None,
     ):
         """Initialize orchestrator configuration.
 
@@ -897,6 +975,10 @@ class OrchestratorConfig:
         self.max_snapshots = max_snapshots
         self.memory_check_interval_seconds = memory_check_interval_seconds
         self.auto_compaction_enabled = auto_compaction_enabled
+        # Concurrent processing configuration
+        self.concurrent_processing_config = (
+            concurrent_processing_config or ConcurrentProcessingConfig()
+        )
 
 
 class Orchestrator:
@@ -936,6 +1018,9 @@ class Orchestrator:
             effect_validator or DefaultEffectValidator()
         )
         self.agent_handles: dict[str, AgentHandle] = {}
+
+        # Effect handler registry for custom effect kinds
+        self._effect_handlers: dict[str, EffectHandler] = {}
 
         # Initialization tracking for lazy startup
         self._initialized: bool = False
@@ -1002,6 +1087,14 @@ class Orchestrator:
             auto_compaction_enabled=config.auto_compaction_enabled,
         )
         self.memory_manager = MemoryManager(memory_config)
+
+        # Concurrent processing
+        self._concurrent_processor = ConcurrentIntentProcessor(
+            config.concurrent_processing_config
+        )
+        self._concurrent_processor.set_intent_processor(
+            self._process_single_intent_for_concurrent
+        )
 
         # Logging and telemetry
         self._logger = get_logger("gunn.orchestrator", world_id=world_id)
@@ -1133,6 +1226,76 @@ class Orchestrator:
         )
 
         return handle
+
+    def register_effect_handler(self, effect_kind: str, handler: EffectHandler) -> None:
+        """Register a custom effect handler for a specific effect kind.
+
+        This enables domain-specific effect types beyond the built-in kinds
+        (Move, Speak, Interact, EntityCreated, EntityRemoved, MessageEmitted).
+
+        Args:
+            effect_kind: The effect kind string to handle (e.g., "Attack", "Heal")
+            handler: Async function that takes (effect, world_state) and applies the effect
+
+        Example:
+            ```python
+            async def handle_attack(effect: Effect, world_state: WorldState) -> None:
+                attacker_id = effect["source_id"]
+                target_id = effect["payload"]["target_id"]
+                damage = effect["payload"]["damage"]
+                # Apply damage logic to world_state
+                ...
+
+            orchestrator.register_effect_handler("Attack", handle_attack)
+            ```
+
+        Notes:
+            - Handlers are called after built-in effect kinds are checked
+            - Handlers should update world_state in-place
+            - Handlers should raise exceptions on failure (will be logged)
+            - Multiple handlers can be registered for different effect kinds
+        """
+        if not effect_kind:
+            raise ValueError("effect_kind cannot be empty")
+        if not callable(handler):
+            raise ValueError("handler must be callable")
+
+        self._effect_handlers[effect_kind] = handler
+
+        self._logger.info(
+            "Custom effect handler registered",
+            effect_kind=effect_kind,
+            handler_name=handler.__name__
+            if hasattr(handler, "__name__")
+            else str(handler),
+        )
+
+    def unregister_effect_handler(self, effect_kind: str) -> None:
+        """Unregister a custom effect handler.
+
+        Args:
+            effect_kind: The effect kind to unregister
+
+        Raises:
+            KeyError: If no handler is registered for this effect kind
+        """
+        if effect_kind not in self._effect_handlers:
+            raise KeyError(f"No handler registered for effect kind: {effect_kind}")
+
+        del self._effect_handlers[effect_kind]
+
+        self._logger.info(
+            "Custom effect handler unregistered",
+            effect_kind=effect_kind,
+        )
+
+    def get_registered_effect_kinds(self) -> list[str]:
+        """Get list of all registered custom effect kinds.
+
+        Returns:
+            List of effect kind strings that have registered handlers
+        """
+        return list(self._effect_handlers.keys())
 
     def set_agent_backpressure_policy(self, agent_id: str, policy_name: str) -> None:
         """Set backpressure policy for a specific agent.
@@ -1352,6 +1515,189 @@ class Orchestrator:
             except Exception:
                 record_intent_throughput(agent_id, intent["kind"], "error")
                 raise
+
+    async def submit_intents(
+        self, intents: list[Intent], sim_time: float | None = None
+    ) -> list[str]:
+        """Submit multiple intents for simultaneous processing at the same sim_time.
+
+        This method enables true simultaneous intent execution within a single tick,
+        maintaining deterministic ordering through (sim_time, priority, source_id, uuid).
+
+        Args:
+            intents: List of intents to process simultaneously
+            sim_time: Optional explicit sim_time for all intents (default: current time)
+
+        Returns:
+            List of request IDs for tracking
+
+        Raises:
+            ValueError: If intents list is empty or contains invalid intents
+            StaleContextError: If any intent context is stale
+            QuotaExceededError: If any agent quota is exceeded
+            BackpressureError: If backpressure limits are exceeded
+            ValidationError: If any intent validation fails
+
+        Notes:
+            - All intents are validated before any are enqueued
+            - If any validation fails, none are processed (atomic batch)
+            - Intents are ordered by priority within the same sim_time
+            - Use this for "speak + move" or other simultaneous actions
+        """
+        if not intents:
+            raise ValueError("intents list cannot be empty")
+
+        await self._ensure_initialized()
+
+        # Use explicit sim_time or current orchestrator time
+        effective_sim_time = (
+            sim_time if sim_time is not None else self._get_current_sim_time()
+        )
+
+        req_ids: list[str] = []
+        validated_intents: list[
+            tuple[Intent, int]
+        ] = []  # (intent, normalized_priority)
+
+        # Phase 1: Validate all intents atomically
+        for intent in intents:
+            if not intent.get("req_id"):
+                raise ValueError("All intents must have 'req_id' field")
+            if not intent.get("agent_id"):
+                raise ValueError("All intents must have 'agent_id' field")
+            if not intent.get("kind"):
+                raise ValueError("All intents must have 'kind' field")
+
+            req_id = intent["req_id"]
+            agent_id = intent["agent_id"]
+            context_seq = intent.get("context_seq", 0)
+
+            # Check idempotency
+            existing_seq = await self._dedup_store.check_and_record(
+                self.world_id, agent_id, req_id, self._global_seq + 1
+            )
+            if existing_seq is not None:
+                self._logger.info(
+                    "Intent already processed (idempotent)",
+                    req_id=req_id,
+                    agent_id=agent_id,
+                    existing_seq=existing_seq,
+                )
+                req_ids.append(req_id)
+                continue
+
+            # Validate agent registration
+            if agent_id not in self.agent_handles:
+                raise ValueError(f"Agent {agent_id} is not registered")
+
+            # Check staleness
+            staleness = self._global_seq - context_seq
+            if staleness > self.config.staleness_threshold:
+                record_conflict(agent_id, "staleness")
+                raise StaleContextError(
+                    req_id,
+                    context_seq,
+                    self._global_seq,
+                    self.config.staleness_threshold,
+                )
+
+            # Check quota
+            await self._check_quota(agent_id, intent)
+
+            # Check backpressure
+            await self._check_backpressure(agent_id)
+
+            # Normalize priority
+            priority = intent.get("priority", self.config.default_priority)
+            normalized_priority = max(0, min(2, 2 - priority // 10))
+
+            validated_intents.append((intent, normalized_priority))
+            req_ids.append(req_id)
+
+        # Phase 2: Enqueue all validated intents
+        for intent, normalized_priority in validated_intents:
+            self._scheduler.enqueue(intent, normalized_priority)
+
+            self._logger.info(
+                "Intent enqueued for simultaneous processing",
+                req_id=intent["req_id"],
+                agent_id=intent["agent_id"],
+                priority=intent.get("priority", self.config.default_priority),
+                normalized_priority=normalized_priority,
+                sim_time=effective_sim_time,
+                batch_size=len(intents),
+            )
+
+            record_intent_throughput(intent["agent_id"], intent["kind"], "success")
+
+        # Start processing if not already running
+        self._start_processing_loop()
+
+        return req_ids
+
+    async def submit_intents_batch(
+        self,
+        intents: list[Intent],
+        sim_time: float | None = None,
+        processing_mode: ProcessingMode | None = None,
+        timeout: float | None = None,
+    ) -> BatchResult:
+        """Submit multiple intents using concurrent processing capabilities.
+
+        This method provides enhanced batch processing with configurable concurrency
+        modes for improved performance in multi-agent scenarios.
+
+        Args:
+            intents: List of intents to process
+            sim_time: Optional explicit sim_time for all intents
+            processing_mode: Processing mode (sequential, concurrent, deterministic_concurrent)
+            timeout: Timeout for concurrent operations
+
+        Returns:
+            BatchResult containing effects, errors, and processing metadata
+
+        Raises:
+            ValueError: If intents list is empty or contains invalid intents
+            asyncio.TimeoutError: If processing exceeds timeout
+        """
+        if not intents:
+            return BatchResult(
+                effects=[],
+                errors={},
+                processing_time=0.0,
+                metadata={"mode": "empty", "intent_count": 0},
+            )
+
+        await self._ensure_initialized()
+
+        # Set sim_time for all intents if provided
+        if sim_time is not None:
+            for intent in intents:
+                intent["sim_time"] = sim_time
+
+        # Use concurrent processor for batch processing
+        result = await self._concurrent_processor.process_batch(
+            intents=intents, mode=processing_mode, timeout=timeout
+        )
+
+        # Start processing loop to handle any queued intents
+        self._start_processing_loop()
+
+        # Log batch processing results
+        self._logger.info(
+            "Batch intent processing completed",
+            intent_count=len(intents),
+            effect_count=len(result.effects),
+            error_count=len(result.errors),
+            processing_time=result.processing_time,
+            mode=result.metadata.get("mode", "unknown"),
+        )
+
+        return result
+
+    def _get_current_sim_time(self) -> float:
+        """Get current simulation time from world state or system time."""
+        return self.world_state.metadata.get("last_effect_time", 0.0)
 
     async def _check_quota(self, agent_id: str, intent: Intent) -> None:
         """Check if agent has quota available for this intent.
@@ -1920,6 +2266,46 @@ class Orchestrator:
             )
             # Intent processing failure - could implement retry logic here
 
+    async def _process_single_intent_for_concurrent(
+        self, intent: Intent
+    ) -> list[Effect]:
+        """Process a single intent and return effects for concurrent processing.
+
+        This method is used by the concurrent processor to handle individual intents
+        and return the generated effects rather than broadcasting them immediately.
+
+        Args:
+            intent: Intent to process
+
+        Returns:
+            List of effects generated from the intent
+
+        Raises:
+            ValidationError: If intent validation fails
+            Exception: Any other processing error
+        """
+        req_id = intent["req_id"]
+        agent_id = intent["agent_id"]
+
+        # Validate the intent
+        if not self.effect_validator.validate_intent(intent, self.world_state):
+            raise ValidationError(intent, ["effect_validator_failed"])
+
+        # Create effect from validated intent
+        effect: Effect = {
+            "kind": intent["kind"],
+            "payload": intent["payload"],
+            "source_id": agent_id,
+            "schema_version": intent.get("schema_version", "1.0.0"),
+            "global_seq": self._global_seq
+            + 1,  # Will be properly assigned when broadcast
+            "sim_time": intent.get("sim_time", self._get_current_sim_time()),
+        }
+
+        # For concurrent processing, we return the effect rather than broadcasting it
+        # The concurrent processor will handle broadcasting in the correct order
+        return [effect]
+
     def get_processing_stats(self) -> dict[str, Any]:
         """Get intent processing statistics.
 
@@ -1974,7 +2360,7 @@ class Orchestrator:
                         # Update spatial index
                         self.world_state.spatial_index[source_id] = tuple(position)
 
-                        # Update entity data
+                        # Update entity data - ensure position is always synchronized
                         if source_id not in self.world_state.entities:
                             self.world_state.entities[source_id] = {}
 
@@ -1982,7 +2368,8 @@ class Orchestrator:
                         if isinstance(entity_data, dict):
                             entity_data.update(
                                 {
-                                    "last_position": position,
+                                    "position": position,  # Canonical position field
+                                    "last_position": position,  # Kept for backward compatibility
                                     "last_move_time": effect["sim_time"],
                                 }
                             )
@@ -2021,17 +2408,22 @@ class Orchestrator:
             elif effect_kind == "EntityCreated":
                 # Create new entity
                 entity_id = payload.get("entity_id", source_id)
-                self.world_state.entities[entity_id] = payload.get("entity_data", {})
+                entity_data = payload.get("entity_data", {})
+                self.world_state.entities[entity_id] = entity_data
 
-                # Set initial position if provided
+                # Set initial position if provided - synchronize both representations
                 if "position" in payload:
                     position = payload["position"]
                     if isinstance(position, list | tuple) and len(position) >= 3:
-                        self.world_state.spatial_index[entity_id] = (
+                        position_tuple = (
                             float(position[0]),
                             float(position[1]),
                             float(position[2]),
                         )
+                        self.world_state.spatial_index[entity_id] = position_tuple
+                        # Also set in entity data for consistency
+                        if isinstance(entity_data, dict):
+                            entity_data["position"] = list(position_tuple)
 
             elif effect_kind == "EntityRemoved":
                 # Remove entity
@@ -2061,6 +2453,14 @@ class Orchestrator:
                             "emit_count": entity_data.get("emit_count", 0) + 1,
                         }
                     )
+            else:
+                # Custom effect kinds - delegate to registered handlers
+                if (
+                    hasattr(self, "_effect_handlers")
+                    and effect_kind in self._effect_handlers
+                ):
+                    handler = self._effect_handlers[effect_kind]
+                    await handler(effect, self.world_state)
 
             # Update world metadata
             self.world_state.metadata.update(

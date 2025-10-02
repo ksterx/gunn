@@ -17,12 +17,21 @@ from .core import (
     Orchestrator,
     OrchestratorConfig,
 )
+from .core.concurrent_processor import (
+    BatchResult,
+    ConcurrentIntentProcessor,
+    ConcurrentProcessingConfig,
+    ProcessingMode,
+)
 
 # Facade exports
 from .facades import MessageFacade, RLFacade
 
 __all__ = [
     "AgentHandle",
+    "BatchResult",
+    "ConcurrentIntentProcessor",
+    "ConcurrentProcessingConfig",
     "DefaultEffectValidator",
     "EffectValidator",
     "EventLog",
@@ -30,6 +39,7 @@ __all__ = [
     "MessageFacade",
     "Orchestrator",
     "OrchestratorConfig",
+    "ProcessingMode",
     "RLFacade",
     "__version__",
 ]
