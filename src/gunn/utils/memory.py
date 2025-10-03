@@ -7,8 +7,9 @@ log compaction, view cache eviction with LRU policy, and memory usage tracking.
 import asyncio
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, Field
 
 from gunn.schemas.messages import WorldState
 from gunn.utils.telemetry import get_logger, record_queue_depth
@@ -17,41 +18,50 @@ if TYPE_CHECKING:
     from gunn.core.event_log import EventLog
 
 
-@dataclass
-class MemoryStats:
+class MemoryStats(BaseModel):
     """Memory usage statistics."""
 
-    total_log_entries: int
-    total_snapshots: int
-    view_cache_size: int
-    estimated_memory_mb: float
-    oldest_entry_age_seconds: float
-    newest_entry_age_seconds: float
-    compaction_eligible_entries: int
+    total_log_entries: int = Field(..., description="Total number of log entries")
+    total_snapshots: int = Field(..., description="Total number of snapshots")
+    view_cache_size: int = Field(..., description="View cache size")
+    estimated_memory_mb: float = Field(..., description="Estimated memory usage in MB")
+    oldest_entry_age_seconds: float = Field(
+        ..., description="Oldest entry age in seconds"
+    )
+    newest_entry_age_seconds: float = Field(
+        ..., description="Newest entry age in seconds"
+    )
+    compaction_eligible_entries: int = Field(
+        ..., description="Number of compaction eligible entries"
+    )
 
 
-@dataclass
-class MemoryConfig:
+class MemoryConfig(BaseModel):
     """Configuration for memory management."""
 
-    max_log_entries: int = 10000
-    view_cache_size: int = 1000
-    compaction_threshold: int = 5000
-    snapshot_interval: int = 1000  # Create snapshot every N events
-    max_snapshots: int = 10
-    memory_check_interval_seconds: float = 60.0
-    auto_compaction_enabled: bool = True
+    max_log_entries: int = Field(10000, description="Maximum number of log entries")
+    view_cache_size: int = Field(1000, description="Maximum size of view cache")
+    compaction_threshold: int = Field(
+        5000, description="Threshold for triggering log compaction"
+    )
+    snapshot_interval: int = Field(1000, description="Create snapshot every N events")
+    max_snapshots: int = Field(10, description="Maximum number of snapshots to keep")
+    memory_check_interval_seconds: float = Field(
+        60.0, description="Interval between memory checks"
+    )
+    auto_compaction_enabled: bool = Field(
+        True, description="Enable automatic log compaction"
+    )
 
 
-@dataclass
-class WorldStateSnapshot:
+class WorldStateSnapshot(BaseModel):
     """Snapshot of world state at a specific point in time."""
 
-    global_seq: int
-    sim_time: float
-    wall_time: float
-    world_state: WorldState
-    checksum: str  # For integrity verification
+    global_seq: int = Field(..., description="Global sequence number for this snapshot")
+    sim_time: float = Field(..., description="Simulation time for this snapshot")
+    wall_time: float = Field(..., description="Wall time for this snapshot")
+    world_state: WorldState = Field(..., description="World state for this snapshot")
+    checksum: str = Field(..., description="Checksum for this snapshot")
 
 
 class ViewCache:

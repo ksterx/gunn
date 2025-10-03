@@ -172,15 +172,15 @@ class TestRLFacade:
     async def test_step_success(self, rl_facade, registered_agent):
         """Test successful step execution."""
         agent_id = registered_agent
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock orchestrator methods
         rl_facade._orchestrator.submit_intent = AsyncMock(return_value="test_req")
@@ -217,15 +217,15 @@ class TestRLFacade:
     async def test_step_auto_fills_req_id(self, rl_facade, registered_agent):
         """Test step auto-fills missing req_id."""
         agent_id = registered_agent
-        intent: Intent = {
-            "kind": "Move",
-            "payload": {"x": 10, "y": 20},
-            "context_seq": 0,
-            "req_id": "",  # Empty req_id
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Move",
+            payload={"x": 10, "y": 20},
+            context_seq=0,
+            req_id="",  # Empty req_id
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock orchestrator and agent handle
         rl_facade._orchestrator.submit_intent = AsyncMock(return_value="auto_req")
@@ -253,15 +253,15 @@ class TestRLFacade:
     async def test_step_auto_fills_agent_id(self, rl_facade, registered_agent):
         """Test step auto-fills missing agent_id."""
         agent_id = registered_agent
-        intent: Intent = {
-            "kind": "Interact",
-            "payload": {"target": "object1"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": "",  # Empty agent_id
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Interact",
+            payload={"target": "object1"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id="",  # Empty agent_id
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock orchestrator and agent handle
         rl_facade._orchestrator.submit_intent = AsyncMock(return_value="test_req")
@@ -288,15 +288,15 @@ class TestRLFacade:
     async def test_step_agent_id_mismatch(self, rl_facade, registered_agent):
         """Test step fails when intent agent_id doesn't match provided agent_id."""
         agent_id = registered_agent
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": "different_agent",  # Mismatched agent_id
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id="different_agent",  # Mismatched agent_id
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         with pytest.raises(
             ValueError,
@@ -306,15 +306,15 @@ class TestRLFacade:
 
     async def test_step_unregistered_agent(self, rl_facade):
         """Test step fails for unregistered agent."""
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": "unknown_agent",
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id="unknown_agent",
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         with pytest.raises(ValueError, match="Agent unknown_agent is not registered"):
             await rl_facade.step("unknown_agent", intent)
@@ -322,15 +322,15 @@ class TestRLFacade:
     async def test_step_stale_context_error(self, rl_facade, registered_agent):
         """Test step handles StaleContextError."""
         agent_id = registered_agent
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock orchestrator to raise StaleContextError
         rl_facade._orchestrator.submit_intent = AsyncMock(
@@ -343,15 +343,15 @@ class TestRLFacade:
     async def test_step_quota_exceeded_error(self, rl_facade, registered_agent):
         """Test step handles QuotaExceededError."""
         agent_id = registered_agent
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock orchestrator to raise QuotaExceededError
         rl_facade._orchestrator.submit_intent = AsyncMock(
@@ -364,15 +364,15 @@ class TestRLFacade:
     async def test_step_backpressure_error(self, rl_facade, registered_agent):
         """Test step handles BackpressureError."""
         agent_id = registered_agent
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock orchestrator to raise BackpressureError
         rl_facade._orchestrator.submit_intent = AsyncMock(
@@ -385,15 +385,15 @@ class TestRLFacade:
     async def test_step_timeout(self, rl_facade, registered_agent):
         """Test step timeout handling."""
         agent_id = registered_agent
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock orchestrator with slow response
         async def slow_submit_intent(*args, **kwargs):
@@ -409,24 +409,24 @@ class TestRLFacade:
     async def test_step_cancels_previous_pending(self, rl_facade, registered_agent):
         """Test step cancels previous pending step for same agent."""
         agent_id = registered_agent
-        intent1: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "First"},
-            "context_seq": 0,
-            "req_id": "req1",
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
-        intent2: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Second"},
-            "context_seq": 0,
-            "req_id": "req2",
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent1 = Intent(
+            kind="Speak",
+            payload={"text": "First"},
+            context_seq=0,
+            req_id="req1",
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
+        intent2 = Intent(
+            kind="Speak",
+            payload={"text": "Second"},
+            context_seq=0,
+            req_id="req2",
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock slow first step
         async def slow_execute_step(*args, **kwargs):
@@ -455,15 +455,15 @@ class TestRLFacade:
         agent_id = registered_agent
 
         # Create a pending step
-        intent: Intent = {
-            "kind": "Speak",
-            "payload": {"text": "Hello"},
-            "context_seq": 0,
-            "req_id": "test_req",
-            "agent_id": agent_id,
-            "priority": 0,
-            "schema_version": "1.0.0",
-        }
+        intent = Intent(
+            kind="Speak",
+            payload={"text": "Hello"},
+            context_seq=0,
+            req_id="test_req",
+            agent_id=agent_id,
+            priority=0,
+            schema_version="1.0.0",
+        )
 
         # Mock slow step execution
         async def slow_execute_step(*args, **kwargs):
@@ -659,15 +659,15 @@ class TestRLFacadeIntegration:
             self.setup_agent_permissions(facade.get_orchestrator(), [agent_id])
 
             # Create intent
-            intent: Intent = {
-                "kind": "Speak",
-                "payload": {"message": "Hello world"},
-                "context_seq": 0,
-                "req_id": f"test_{uuid.uuid4().hex[:8]}",
-                "agent_id": agent_id,
-                "priority": 0,
-                "schema_version": "1.0.0",
-            }
+            intent = Intent(
+                kind="Speak",
+                payload={"message": "Hello world"},
+                context_seq=0,
+                req_id=f"test_{uuid.uuid4().hex[:8]}",
+                agent_id=agent_id,
+                priority=0,
+                schema_version="1.0.0",
+            )
 
             # Execute step - this tests the full integration
             effect, observation = await asyncio.wait_for(

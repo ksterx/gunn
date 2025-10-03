@@ -409,15 +409,15 @@ class TestEventLogPerformance:
         # Add many effects
         start_time = time.perf_counter()
         for i in range(1000):
-            effect: Effect = {
-                "uuid": f"uuid-{i}",
-                "kind": "Move",
-                "payload": {"x": i, "y": i},
-                "global_seq": i,
-                "sim_time": float(i),
-                "source_id": f"agent_{i % 10}",  # 10 different agents
-                "schema_version": "1.0.0",
-            }
+            effect = Effect(
+                uuid=f"uuid-{i}",
+                kind="Move",
+                payload={"x": i, "y": i},
+                global_seq=i,
+                sim_time=float(i),
+                source_id=f"agent_{i % 10}",  # 10 different agents
+                schema_version="1.0.0",
+            )
             await event_log.append(effect)
 
         append_time = time.perf_counter() - start_time

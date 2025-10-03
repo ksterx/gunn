@@ -187,7 +187,7 @@ class Config(BaseModel):
 
     @field_validator("orchestrator", mode="before")
     @classmethod
-    def validate_orchestrator_config(cls, v):
+    def validate_orchestrator_config(cls, v: Any) -> Any:
         """Validate orchestrator configuration."""
         if isinstance(v, dict):
             return OrchestratorConfig(**v)
@@ -195,7 +195,7 @@ class Config(BaseModel):
 
     @field_validator("features", mode="before")
     @classmethod
-    def validate_features(cls, v):
+    def validate_features(cls, v: Any) -> Any:
         """Validate feature flags."""
         if isinstance(v, dict):
             return FeatureFlags(**v)
@@ -250,6 +250,7 @@ def load_config_from_env() -> Config:
         Configuration loaded from environment variables
     """
     config_data: dict[str, Any] = {}
+    env_val: Any
 
     # Environment and debug
     if env_val := os.getenv("GUNN_ENVIRONMENT"):
@@ -272,7 +273,7 @@ def load_config_from_env() -> Config:
         config_data["logging"] = logging_config
 
     # Metrics configuration
-    metrics_config = {}
+    metrics_config: dict[str, Any] = {}
     if env_val := os.getenv("GUNN_METRICS_PORT"):
         try:
             metrics_config["port"] = int(env_val)
@@ -291,7 +292,7 @@ def load_config_from_env() -> Config:
         config_data["database"] = database_config
 
     # Orchestrator configuration
-    orchestrator_config = {}
+    orchestrator_config: dict[str, Any] = {}
     if env_val := os.getenv("GUNN_MAX_AGENTS"):
         try:
             orchestrator_config["max_agents"] = int(env_val)

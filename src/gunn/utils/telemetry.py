@@ -23,7 +23,7 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from structlog.processors import JSONRenderer
 
@@ -258,14 +258,13 @@ def setup_tracing(
     tracer_provider = TracerProvider(resource=resource)
     trace.set_tracer_provider(tracer_provider)
 
+    exporter: OTLPSpanExporter | ConsoleSpanExporter
     # Configure exporter
     if otlp_endpoint:
         # Use OTLP exporter for production
         exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
     else:
         # Use console exporter for development
-        from opentelemetry.sdk.trace.export import ConsoleSpanExporter
-
         exporter = ConsoleSpanExporter()
 
     # Add span processor
@@ -801,11 +800,12 @@ class SystemMonitor:
         """
         try:
             memory_info = self._process.memory_info()
-            memory_bytes = memory_info.rss  # Resident Set Size
+            memory_bytes: float = memory_info.rss  # Resident Set Size
 
             MEMORY_USAGE_BYTES.labels(component=component).set(memory_bytes)
 
             return memory_bytes
+
         except Exception as e:
             get_logger("gunn.telemetry.monitor").warning(
                 "Failed to record memory usage", component=component, error=str(e)
@@ -823,7 +823,7 @@ class SystemMonitor:
         """
         try:
             # Use interval to get accurate CPU percentage
-            cpu_percent = self._process.cpu_percent(interval=None)
+            cpu_percent: float = self._process.cpu_percent(interval=None)
 
             # If this is the first call, cpu_percent returns 0.0
             # Use the cached value from previous call
@@ -835,6 +835,7 @@ class SystemMonitor:
             CPU_USAGE_PERCENT.labels(component=component).set(cpu_percent)
 
             return cpu_percent
+
         except Exception as e:
             get_logger("gunn.telemetry.monitor").warning(
                 "Failed to record CPU usage", component=component, error=str(e)
@@ -886,7 +887,7 @@ class SystemMonitor:
 class BandwidthMonitor:
     """Monitor bandwidth usage for patch operations and other data transfers."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._logger = get_logger("gunn.telemetry.bandwidth")
 
     def record_patch_bandwidth(

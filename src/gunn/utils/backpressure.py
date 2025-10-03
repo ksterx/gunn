@@ -7,15 +7,13 @@ and resource exhaustion scenarios with configurable strategies.
 import asyncio
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import Any, TypeVar
+from typing import Any
 
 from gunn.utils.errors import BackpressureError
 from gunn.utils.telemetry import record_backpressure_event, record_queue_high_watermark
 
-T = TypeVar("T")
 
-
-class BackpressurePolicy(ABC, type[T]):
+class BackpressurePolicy[T](ABC):
     """Abstract base class for backpressure policies.
 
     Defines the interface for handling queue overflow scenarios
@@ -84,7 +82,7 @@ class BackpressurePolicy(ABC, type[T]):
             )
 
 
-class DeferPolicy(BackpressurePolicy[T]):
+class DeferPolicy[T](BackpressurePolicy[T]):
     """Defer policy - block new items when threshold exceeded.
 
     This is the default policy that raises BackpressureError to defer
@@ -115,7 +113,7 @@ class DeferPolicy(BackpressurePolicy[T]):
         return False  # Never reached due to exception
 
 
-class ShedOldestPolicy(BackpressurePolicy[T]):
+class ShedOldestPolicy[T](BackpressurePolicy[T]):
     """Shed oldest policy - drop oldest items to make room for new ones.
 
     When queue exceeds threshold, removes oldest items to make room
@@ -161,7 +159,7 @@ class ShedOldestPolicy(BackpressurePolicy[T]):
         return True
 
 
-class DropNewestPolicy(BackpressurePolicy[T]):
+class DropNewestPolicy[T](BackpressurePolicy[T]):
     """Drop newest policy - drop new items when threshold exceeded.
 
     When queue exceeds threshold, drops the new item instead of
@@ -265,7 +263,7 @@ class BackpressureManager:
 backpressure_manager = BackpressureManager()
 
 
-class BackpressureQueue(type[T]):
+class BackpressureQueue[T]:
     """Queue with integrated backpressure policy support.
 
     A queue implementation that automatically applies backpressure

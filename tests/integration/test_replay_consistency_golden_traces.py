@@ -10,17 +10,28 @@ import hashlib
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
+from pydantic import BaseModel
 
 from gunn.cli.replay import ReplayEngine, create_sample_log
 from gunn.core.event_log import EventLog
 from gunn.core.orchestrator import Orchestrator, OrchestratorConfig
 from gunn.facades import RLFacade
 from gunn.policies.observation import DefaultObservationPolicy, PolicyConfig
-from gunn.schemas.types import Intent
+from gunn.schemas.types import Effect, Intent
 from gunn.utils.telemetry import get_logger
+
+
+class GoldenTrace(BaseModel):
+    version: str
+    entry_count: int
+    effects: list[Effect]
+    checksums: list[str]
+    global_seqs: list[int]
+    sim_times: list[float]
+    source_ids: list[str]
 
 
 class GoldenTraceValidator:
@@ -29,7 +40,7 @@ class GoldenTraceValidator:
     def __init__(self):
         self.logger = get_logger("golden_trace_validator")
 
-    def create_trace_hash(self, trace_data: dict[str, Any]) -> str:
+    def create_trace_hash(self, trace_data: GoldenTrace) -> str:
         """Create deterministic hash of trace data."""
 
         # Sort keys recursively for consistent hashing
@@ -45,45 +56,50 @@ class GoldenTraceValidator:
         json_str = json.dumps(sorted_data, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(json_str.encode()).hexdigest()
 
-    def extract_trace_from_log(self, event_log: EventLog) -> dict[str, Any]:
+    def extract_trace_from_log(self, event_log: EventLog) -> GoldenTrace:
         """Extract deterministic trace data from event log."""
         entries = event_log.get_all_entries()
 
-        trace = {
-            "version": "1.0.0",
-            "entry_count": len(entries),
-            "effects": [],
-            "checksums": [],
-            "global_seqs": [],
-            "sim_times": [],
-            "source_ids": [],
-        }
+        effects: list[Effect] = []
+        checksums: list[str] = []
+        global_seqs: list[int] = []
+        sim_times: list[float] = []
+        source_ids: list[str] = []
 
         for entry in entries:
             effect = entry.effect
 
             # Extract deterministic fields
-            trace["effects"].append(
-                {
-                    "kind": effect["kind"],
-                    "payload": effect["payload"],
-                    "global_seq": effect["global_seq"],
-                    "sim_time": effect["sim_time"],
-                    "source_id": effect["source_id"],
-                    "schema_version": effect["schema_version"],
+            effects.append(
+                Effect(
+                    uuid=effect["uuid"],
+                    kind=effect["kind"],
+                    payload=effect["payload"],
+                    global_seq=effect["global_seq"],
+                    sim_time=effect["sim_time"],
+                    source_id=effect["source_id"],
+                    schema_version=effect["schema_version"],
                     # Note: UUID is excluded as it's non-deterministic
-                }
+                )
             )
 
-            trace["checksums"].append(entry.checksum)
-            trace["global_seqs"].append(effect["global_seq"])
-            trace["sim_times"].append(effect["sim_time"])
-            trace["source_ids"].append(effect["source_id"])
+            checksums.append(entry.checksum)
+            global_seqs.append(effect["global_seq"])
+            sim_times.append(effect["sim_time"])
+            source_ids.append(effect["source_id"])
 
-        return trace
+        return GoldenTrace(
+            version="1.0.0",
+            entry_count=len(entries),
+            effects=effects,
+            checksums=checksums,
+            global_seqs=global_seqs,
+            sim_times=sim_times,
+            source_ids=source_ids,
+        )
 
     def compare_traces(
-        self, trace1: dict[str, Any], trace2: dict[str, Any]
+        self, trace1: GoldenTrace, trace2: GoldenTrace
     ) -> dict[str, Any]:
         """Compare two traces and return detailed comparison results."""
         comparison = {
@@ -94,20 +110,20 @@ class GoldenTraceValidator:
         }
 
         # Compare basic properties
-        if trace1["entry_count"] != trace2["entry_count"]:
+        if trace1.entry_count != trace2.entry_count:
             comparison["identical"] = False
             comparison["differences"].append(
                 {
                     "field": "entry_count",
-                    "value1": trace1["entry_count"],
-                    "value2": trace2["entry_count"],
+                    "value1": trace1.entry_count,
+                    "value2": trace2.entry_count,
                 }
             )
 
         # Compare effects
-        if len(trace1["effects"]) == len(trace2["effects"]):
+        if len(trace1.effects) == len(trace2.effects):
             for i, (effect1, effect2) in enumerate(
-                zip(trace1["effects"], trace2["effects"], strict=False)
+                zip(trace1.effects, trace2.effects, strict=False)
             ):
                 if effect1 != effect2:
                     comparison["identical"] = False
@@ -123,20 +139,20 @@ class GoldenTraceValidator:
             comparison["differences"].append(
                 {
                     "field": "effects_length",
-                    "value1": len(trace1["effects"]),
-                    "value2": len(trace2["effects"]),
+                    "value1": len(trace1.effects),
+                    "value2": len(trace2.effects),
                 }
             )
 
         # Compare sequences
         for field in ["global_seqs", "sim_times", "source_ids"]:
-            if trace1[field] != trace2[field]:
+            if getattr(trace1, field) != getattr(trace2, field):
                 comparison["identical"] = False
                 comparison["differences"].append(
                     {
                         "field": field,
-                        "value1": trace1[field],
-                        "value2": trace2[field],
+                        "value1": getattr(trace1, field),
+                        "value2": getattr(trace2, field),
                     }
                 )
 
@@ -394,17 +410,17 @@ class TestGoldenTraces:
         trace = validator.extract_trace_from_log(log)
 
         # Verify trace structure
-        assert trace["version"] == "1.0.0"
-        assert trace["entry_count"] == 5
-        assert len(trace["effects"]) == 5
-        assert len(trace["checksums"]) == 5
-        assert len(trace["global_seqs"]) == 5
+        assert trace.version == "1.0.0"
+        assert trace.entry_count == 5
+        assert len(trace.effects) == 5
+        assert len(trace.checksums) == 5
+        assert len(trace.global_seqs) == 5
 
         # Verify deterministic properties
-        assert trace["global_seqs"] == sorted(trace["global_seqs"]), (
+        assert trace.global_seqs == sorted(trace.global_seqs), (
             "Global seqs should be monotonic"
         )
-        assert len(set(trace["checksums"])) == len(trace["checksums"]), (
+        assert len(set(trace.checksums)) == len(trace.checksums), (
             "Checksums should be unique"
         )
 
@@ -554,7 +570,11 @@ class TestGoldenTraces:
                 effect_validator._agent_cooldowns.clear()
 
             # Execute deterministic operations (using only different agents to avoid cooldown issues)
-            operations = [
+            operations: list[
+                tuple[
+                    str, Literal["Speak", "Move", "Interact", "Custom"], dict[str, Any]
+                ]
+            ] = [
                 ("golden_agent_0", "Speak", {"message": "First message"}),
                 ("golden_agent_1", "Speak", {"message": "Hello world"}),
                 ("golden_agent_2", "Speak", {"message": "Test message"}),
@@ -565,15 +585,15 @@ class TestGoldenTraces:
                 try:
                     # Use global sequence to avoid staleness errors
                     current_global_seq = orchestrator._global_seq
-                    intent: Intent = {
-                        "kind": kind,
-                        "payload": payload,
-                        "context_seq": current_global_seq,
-                        "req_id": f"golden_req_{i}",
-                        "agent_id": agent_id,
-                        "priority": 1,
-                        "schema_version": "1.0.0",
-                    }
+                    intent = Intent(
+                        kind=kind,
+                        payload=payload,
+                        context_seq=current_global_seq,
+                        req_id=f"golden_req_{i}",
+                        agent_id=agent_id,
+                        priority=1,
+                        schema_version="1.0.0",
+                    )
 
                     result = await facade.step(agent_id, intent)
                     if result and not result.get("error"):
@@ -589,7 +609,7 @@ class TestGoldenTraces:
             golden_trace = validator.extract_trace_from_log(event_log)
 
             # Verify trace properties - expect at least 2 successful operations
-            actual_operations = golden_trace["entry_count"]
+            actual_operations = golden_trace.entry_count
 
             assert actual_operations >= 2, (
                 f"Expected at least 2 operations, got {actual_operations}"
@@ -597,30 +617,28 @@ class TestGoldenTraces:
             assert actual_operations <= len(operations), (
                 f"Got more operations ({actual_operations}) than expected ({len(operations)})"
             )
-            assert len(golden_trace["effects"]) == actual_operations
+            assert len(golden_trace.effects) == actual_operations
 
             # Verify deterministic ordering
-            global_seqs = golden_trace["global_seqs"]
+            global_seqs = golden_trace.global_seqs
             assert global_seqs == sorted(global_seqs), (
                 "Global sequences should be monotonic"
             )
 
             # Test basic golden trace properties
-            assert "checksums" in golden_trace, "Golden trace should have checksums"
-            assert "sim_times" in golden_trace, (
-                "Golden trace should have simulation times"
-            )
-            assert "source_ids" in golden_trace, "Golden trace should have source IDs"
-            assert "effects" in golden_trace, "Golden trace should have effects"
+            assert golden_trace.checksums, "Golden trace should have checksums"
+            assert golden_trace.sim_times, "Golden trace should have simulation times"
+            assert golden_trace.source_ids, "Golden trace should have source IDs"
+            assert golden_trace.effects, "Golden trace should have effects"
 
             # Verify basic trace structure
-            assert len(golden_trace["checksums"]) == actual_operations, (
+            assert len(golden_trace.checksums) == actual_operations, (
                 "Checksums count should match operations"
             )
-            assert len(golden_trace["sim_times"]) == actual_operations, (
+            assert len(golden_trace.sim_times) == actual_operations, (
                 "Sim times count should match operations"
             )
-            assert len(golden_trace["source_ids"]) == actual_operations, (
+            assert len(golden_trace.source_ids) == actual_operations, (
                 "Source IDs count should match operations"
             )
 

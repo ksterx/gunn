@@ -10,7 +10,7 @@ import asyncio
 import time
 from typing import Any
 
-from .timing import TimedQueue
+from gunn.utils.timing import TimedQueue
 
 
 async def demo_basic_usage() -> None:

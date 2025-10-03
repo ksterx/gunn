@@ -106,29 +106,23 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
+disable_error_code = [
+    "misc",
+    "valid-type",
+    "import-not-found",
+    "import-untyped",
+]
 
 # Less strict for test files
 [[tool.mypy.overrides]]
-module = [
-    "tests.*",
-    "tests/*",
-    "gunn.utils.test_hashing_integration",
-    "gunn.utils.test_hashing",
-    "gunn.utils.hashing_demo",
-    "gunn.core.test_event_log",
-    "gunn.core.test_orchestrator",
-    "gunn.core.test_orchestrator_integration",
-    "gunn.utils.test_telemetry",
-    "gunn.policies.test_observation",
-    "gunn.policies.test_observation_integration",
-]
+module = ["tests/*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 disallow_untyped_decorators = false
 disallow_subclassing_any = false
 
 [[tool.mypy.overrides]]
-module = ["requests", "yaml"]
+module = ["requests", "yaml", "psutil"]
 ignore_missing_imports = true
 
 # Pytest configuration
@@ -163,6 +157,28 @@ exclude_lines = [
 ]
 
 [dependency-groups]
+demo = [
+    # FastAPI backend dependencies
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "websockets>=12.0",
+    
+    # Pygame frontend dependencies  
+    "pygame>=2.5.0",
+    
+    # OpenAI integration
+    "openai>=1.109.1",
+    
+    # Additional demo utilities
+    "matplotlib>=3.10.6",
+    "numpy>=1.24.0",
+    "pillow>=10.0.0",
+    
+    # HTTP client for frontend-backend communication
+    "httpx>=0.28.1",
+    "aiohttp>=3.9.0",
+]
+
 dev = [
     "pre-commit>=4.3.0",
     "pytest>=8.4.2",

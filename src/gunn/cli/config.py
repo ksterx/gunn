@@ -272,7 +272,7 @@ def run_config_command(args: list[str]) -> int:
         return 1
 
 
-def print_config_help():
+def print_config_help() -> None:
     """Print configuration command help."""
     print(
         """gunn config - Configuration management

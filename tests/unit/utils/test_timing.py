@@ -112,7 +112,7 @@ class TestTimedQueue:
                 await queue.put_at(now + 0.01, f"item_{start_index + i}")
 
         # Start multiple concurrent put operations
-        await asyncio.gather(put_items(0, 10), put_items(10, 10), put_items(20, 10))  # type: ignore
+        await asyncio.gather(put_items(0, 10), put_items(10, 10), put_items(20, 10))
 
         # Should have all 30 items
         assert queue.qsize() == 30
@@ -140,7 +140,7 @@ class TestTimedQueue:
             return await queue.get()
 
         # Start multiple concurrent get operations
-        results = await asyncio.gather(*[get_item() for _ in range(10)])  # type: ignore
+        results = await asyncio.gather(*[get_item() for _ in range(10)])
 
         assert len(results) == 10
         assert len(set(results)) == 10  # All results should be unique
@@ -156,7 +156,7 @@ class TestTimedQueue:
             await queue.put_at(loop.time(), "delayed_item")
 
         # Start delayed put in background
-        put_task = asyncio.create_task(delayed_put())  # type: ignore
+        put_task = asyncio.create_task(delayed_put())
 
         # get() should block until item is available
         start_time = time.time()
@@ -277,7 +277,7 @@ class TestTimedQueue:
             return f"waiter_{waiter_id}_{item}"
 
         # Start multiple waiters
-        waiter_tasks = [asyncio.create_task(waiter(i)) for i in range(3)]  # type: ignore
+        waiter_tasks = [asyncio.create_task(waiter(i)) for i in range(3)]
 
         # Give waiters time to start waiting
         await asyncio.sleep(0.01)
@@ -332,7 +332,7 @@ class TestTimedQueue:
                 await asyncio.sleep(0.001)  # 1ms between puts
 
         # Start frequent putting in background
-        put_task = asyncio.create_task(frequent_putter())  # type: ignore
+        put_task = asyncio.create_task(frequent_putter())
 
         # Get items and measure responsiveness
         start_time = loop.time()

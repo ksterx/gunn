@@ -1,49 +1,68 @@
 """Core type definitions using TypedDict for performance and schema versioning."""
 
 import asyncio
-from typing import Any, Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 
 
 class Intent(TypedDict):
-    """Intent submitted by an agent to perform an action."""
+    """Intent submitted by an agent to perform an action.
 
-    kind: Literal["Speak", "Move", "Interact", "Custom"]
-    payload: dict[str, Any]
-    context_seq: int
-    req_id: str
-    agent_id: str
-    priority: int  # Higher numbers = higher priority
-    schema_version: str
+    This represents a request from an agent to perform a specific action in the world.
+    Intents go through validation before being converted to Effects.
+    """
+
+    kind: Annotated[
+        Literal["Speak", "Move", "Interact", "Custom"], "Type of action to perform"
+    ]
+    payload: Annotated[
+        dict[str, Any], "Action-specific data (e.g., {'to': [x,y,z]} for Move)"
+    ]
+    context_seq: Annotated[
+        int,
+        "Agent's view sequence when this intent was created (for staleness detection)",
+    ]
+    req_id: Annotated[str, "Unique request identifier for tracking and deduplication"]
+    agent_id: Annotated[str, "ID of the agent submitting this intent"]
+    priority: Annotated[int, "Processing priority (higher numbers = higher priority)"]
+    schema_version: Annotated[str, "Schema version for compatibility (e.g., '1.0.0')"]
 
 
 class EffectDraft(TypedDict):
-    """External input for effects - Orchestrator fills in uuid, global_seq, sim_time."""
+    """External input for effects - Orchestrator fills in uuid, global_seq, sim_time.
 
-    kind: str
-    payload: dict[str, Any]
-    source_id: str
-    schema_version: str
+    This is the incomplete form of an Effect, used when external systems (like game engines)
+    want to broadcast events. The Orchestrator completes it with timing and sequence info.
+    """
+
+    kind: Annotated[str, "Type of effect (e.g., 'Move', 'Speak', 'EnvironmentChanged')"]
+    payload: Annotated[dict[str, Any], "Effect-specific data"]
+    source_id: Annotated[str, "ID of the system/agent that created this effect"]
+    schema_version: Annotated[str, "Schema version for compatibility"]
 
 
 class Effect(TypedDict):
     """Complete effect with all fields filled by Orchestrator."""
 
-    uuid: str  # Unique ID for ordering tie-breaker
-    kind: str
-    payload: dict[str, Any]
-    global_seq: int
-    sim_time: float
-    source_id: str
-    schema_version: str  # Semantic versioning (e.g., "1.0.0")
+    uuid: Annotated[str, "Unique ID for ordering tie-breaker"]
+    kind: Annotated[str, "Type of effect (e.g., 'Move', 'Speak', 'EnvironmentChanged')"]
+    payload: Annotated[dict[str, Any], "Effect-specific data"]
+    global_seq: Annotated[int, "Global sequence number for deterministic ordering"]
+    sim_time: Annotated[float, "Simulation time when this effect occurred"]
+    source_id: Annotated[str, "ID of the system/agent that created this effect"]
+    schema_version: Annotated[str, "Semantic versioning (e.g., '1.0.0')"]
 
 
 class ObservationDelta(TypedDict):
     """RFC6902 JSON Patch operations for incremental view updates."""
 
-    view_seq: int
-    patches: list[dict[str, Any]]  # RFC6902 JSON Patch operations with stable paths
-    context_digest: str
-    schema_version: str
+    view_seq: Annotated[int, "Sequence number of the view this delta updates to"]
+    patches: Annotated[
+        list[dict[str, Any]], "RFC6902 JSON Patch operations with stable paths"
+    ]
+    context_digest: Annotated[
+        str, "Hash digest of the resulting view state for integrity checking"
+    ]
+    schema_version: Annotated[str, "Schema version for compatibility"]
 
 
 class CancelToken:

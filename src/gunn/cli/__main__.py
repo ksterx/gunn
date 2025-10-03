@@ -84,7 +84,7 @@ def run_web(args: list[str]) -> int:
         cli()
         return 0
     except SystemExit as e:
-        return e.code or 0
+        return e.code or 0  # type: ignore
     except Exception as e:
         print(f"Web adapter error: {e}")
         return 1

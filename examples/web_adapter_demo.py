@@ -14,11 +14,11 @@ import httpx
 import uvicorn
 import websockets
 
-from gunn.adapters.web import AuthToken, create_web_adapter
-from gunn.core.orchestrator import Orchestrator, OrchestratorConfig
+from gunn.adapters.web import AuthToken, WebAdapter, create_web_adapter
+from gunn.core.orchestrator import AgentHandle, Orchestrator, OrchestratorConfig
 from gunn.policies.observation import ObservationPolicy
 from gunn.schemas.messages import View, WorldState
-from gunn.schemas.types import Effect
+from gunn.schemas.types import Effect, ObservationDelta
 
 
 class DemoObservationPolicy(ObservationPolicy):
@@ -32,13 +32,13 @@ class DemoObservationPolicy(ObservationPolicy):
 
     def filter_world_state(self, world_state: WorldState, agent_id: str) -> View:
         """Return a filtered view for the agent."""
-        return {
-            "agent_id": agent_id,
-            "view_seq": 0,
-            "visible_entities": world_state.entities,
-            "visible_relationships": world_state.relationships,
-            "context_digest": f"digest_{agent_id}_{int(time.time())}",
-        }
+        return View(
+            agent_id=agent_id,
+            view_seq=0,
+            visible_entities=world_state.entities,
+            visible_relationships=world_state.relationships,
+            context_digest=f"digest_{agent_id}_{int(time.time())}",
+        )
 
     def should_observe_event(
         self, effect: Effect, agent_id: str, world_state: WorldState
@@ -47,23 +47,27 @@ class DemoObservationPolicy(ObservationPolicy):
         # For demo, agents observe all events
         return True
 
-    def calculate_observation_delta(self, old_view: View, new_view: View) -> View:
+    def calculate_observation_delta(
+        self, old_view: View, new_view: View
+    ) -> ObservationDelta:
         """Calculate observation delta between views."""
-        return {
-            "view_seq": new_view.get("view_seq", 0) + 1,
-            "patches": [
+        return ObservationDelta(
+            view_seq=new_view.view_seq + 1,
+            patches=[
                 {
                     "op": "replace",
                     "path": "/entities/demo",
                     "value": {"updated_at": time.time()},
                 }
             ],
-            "context_digest": new_view.get("context_digest", ""),
-            "schema_version": "1.0.0",
-        }
+            context_digest=new_view.context_digest,
+            schema_version="1.0.0",
+        )
 
 
-async def setup_demo_environment():
+async def setup_demo_environment() -> tuple[
+    Orchestrator, WebAdapter, AgentHandle, AgentHandle
+]:
     """Set up the demo environment with orchestrator and agents."""
     print("Setting up demo environment...")
 
@@ -189,7 +193,7 @@ async def demo_rest_api():
     print("REST API demo completed")
 
 
-async def demo_websocket():
+async def demo_websocket() -> None:
     """Demonstrate WebSocket functionality."""
     print("\n=== WebSocket Demo ===")
 
@@ -265,7 +269,7 @@ async def demo_websocket():
     print("WebSocket demo completed")
 
 
-async def demo_authentication():
+async def demo_authentication() -> None:
     """Demonstrate authentication and authorization features."""
     print("\n=== Authentication Demo ===")
 

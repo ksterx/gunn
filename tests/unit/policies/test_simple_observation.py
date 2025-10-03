@@ -28,12 +28,12 @@ async def test_simple_observation_distribution():
     orchestrator.world_state.spatial_index["speaker"] = (10.0, 10.0, 0.0)
 
     # Broadcast event
-    draft: EffectDraft = {
-        "kind": "Speak",
-        "payload": {"text": "Hello!"},
-        "source_id": "speaker",
-        "schema_version": "1.0.0",
-    }
+    draft = EffectDraft(
+        kind="Speak",
+        payload={"text": "Hello!"},
+        source_id="speaker",
+        schema_version="1.0.0",
+    )
 
     await orchestrator.broadcast_event(draft)
 

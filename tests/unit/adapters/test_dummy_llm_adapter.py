@@ -361,7 +361,7 @@ class TestDummyLLMAdapter:
         # Test cancellation
         cancel_token.cancel("integration_test")
         assert cancel_token.cancelled
-        assert cancel_token.reason == "integration_test"  # type: ignore
+        assert cancel_token.reason == "integration_test"
 
     @pytest.mark.asyncio
     async def test_edge_case_zero_tokens(self):

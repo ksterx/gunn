@@ -5,6 +5,7 @@ permissions, and world state constraints.
 """
 
 import time
+from typing import Literal
 from unittest.mock import MagicMock
 
 import pytest
@@ -68,7 +69,7 @@ class TestDefaultEffectValidator:
     def create_valid_intent(
         self,
         agent_id: str = "agent1",
-        kind: str = "Speak",
+        kind: Literal["Speak", "Move", "Interact", "Custom"] = "Speak",
         payload: dict | None = None,
         req_id: str = "test_req_1",
     ) -> Intent:
