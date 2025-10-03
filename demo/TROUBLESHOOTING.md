@@ -120,7 +120,7 @@ openai.RateLimitError: Rate limit exceeded
 3. **Use a different model:**
    ```python
    # In demo/backend/ai_decision.py
-   model = "gpt-3.5-turbo"  # Instead of gpt-4o
+   model = "gpt-4.1"  # Instead of gpt-4.1-mini
    ```
 
 ### Problem: Model access denied
@@ -131,11 +131,11 @@ openai.PermissionDeniedError: You don't have access to this model
 ```
 
 **Solution:**
-1. **Check your OpenAI plan** - GPT-4 requires a paid plan
+1. **Check your OpenAI plan**
 2. **Use an available model:**
    ```python
    # In demo/backend/ai_decision.py
-   model = "gpt-3.5-turbo"  # More widely available
+   model = "gpt-4.1-mini"  # More widely available
    ```
 
 ### Problem: API timeout errors
@@ -323,7 +323,7 @@ sqlite3.OperationalError: database is locked
 **Solution:**
 1. **Use faster OpenAI model:**
    ```python
-   model = "gpt-3.5-turbo"  # Faster than GPT-4
+   model = "gpt-4.1-mini"  # Faster than GPT-5
    ```
 
 2. **Reduce decision complexity:**

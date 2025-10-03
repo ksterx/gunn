@@ -37,7 +37,7 @@ GAME_CONFIG: dict[str, Any] = {
     "window_height": 600,
     "fps": 60,
     # AI settings
-    "openai_model": "gpt-4o-2024-08-06",
+    "openai_model": "gpt-4.1-mini",
     "decision_temperature": 0.7,
     "max_tokens": 1000,
 }

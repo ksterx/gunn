@@ -207,7 +207,7 @@ class AgentDecision(BaseModel):
 
 ```python
 class AIDecisionMaker:
-    def __init__(self, api_key: str, model: str = "gpt-4o-2024-08-06"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1-mini"):
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = model
         self.timeout = 30.0

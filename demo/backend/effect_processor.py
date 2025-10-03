@@ -16,9 +16,15 @@ from ..shared.models import BattleWorldState, TeamCommunication
 class EffectProcessor:
     """Processes effects and updates world state accordingly."""
 
-    def __init__(self):
-        """Initialize the effect processor."""
+    def __init__(self, action_callback=None):
+        """Initialize the effect processor.
+
+        Args:
+            action_callback: Optional callback function to notify about action results.
+                             Signature: async def callback(agent_id, action_type, success, details)
+        """
         self._logger = get_logger("effect_processor")
+        self._action_callback = action_callback
 
         # Map effect kinds to their handler methods
         self._effect_handlers = {
@@ -65,6 +71,9 @@ class EffectProcessor:
 
                 self._logger.debug(f"Processed effect: {effect_kind}")
 
+                # Notify about action results
+                await self._notify_action_result(effect, world_state)
+
             except Exception as e:
                 failed_count += 1
                 self._logger.error(f"Failed to process effect {effect}: {e}")
@@ -103,8 +112,42 @@ class EffectProcessor:
 
         if handler:
             await handler(effect, world_state)
+            # Notify about action results after processing effect
+            await self._notify_action_result(effect, world_state)
         else:
             self._logger.warning(f"No handler found for effect kind: {effect_kind}")
+
+    async def _notify_action_result(
+        self, effect: dict[str, Any], world_state: BattleWorldState
+    ) -> None:
+        """Notify about action results via callback."""
+        if not self._action_callback:
+            return
+
+        try:
+            effect_kind = effect.get("kind", "")
+            payload = effect.get("payload", {})
+            source_id = effect.get("source_id", "")
+
+            # Map effect kinds to action types and extract details
+            action_mapping = {
+                "Move": ("move", True, ""),
+                "AgentDamaged": ("attack", True, f"-{payload.get('damage', 0)}HP"),
+                "AgentDied": ("kill", True, "eliminated"),
+                "AgentHealed": ("heal", True, f"+{payload.get('heal_amount', 0)}HP"),
+                "WeaponRepaired": ("repair", True, "weapon fixed"),
+                "TeamMessage": ("communicate", True, ""),
+                "AttackFailed": ("attack", False, payload.get("reason", "failed")),
+                "HealFailed": ("heal", False, payload.get("reason", "failed")),
+                "RepairFailed": ("repair", False, payload.get("reason", "failed")),
+            }
+
+            if effect_kind in action_mapping:
+                action_type, success, details = action_mapping[effect_kind]
+                await self._action_callback(source_id, action_type, success, details)
+
+        except Exception as e:
+            self._logger.warning(f"Error notifying action result: {e}")
 
     async def _handle_agent_damaged(
         self, effect: dict[str, Any], world_state: BattleWorldState

@@ -28,7 +28,7 @@ class TestAIDecisionMaker:
     @pytest.fixture
     def ai_decision_maker(self):
         """Create AIDecisionMaker instance for testing."""
-        return AIDecisionMaker(api_key="test_key", model="gpt-4o-2024-08-06")
+        return AIDecisionMaker(api_key="test_key", model="gpt-4.1-mini")
 
     @pytest.fixture
     def sample_agent(self):
@@ -122,9 +122,9 @@ class TestAIDecisionMaker:
 
     def test_initialization(self):
         """Test AIDecisionMaker initialization."""
-        ai_maker = AIDecisionMaker(api_key="test_key", model="gpt-4o")
+        ai_maker = AIDecisionMaker(api_key="test_key", model="gpt-4.1-mini")
 
-        assert ai_maker.model == "gpt-4o"
+        assert ai_maker.model == "gpt-4.1-mini"
         assert ai_maker.request_timeout == 30.0
         assert ai_maker.max_retries == 2
         assert ai_maker.client is not None
@@ -133,7 +133,7 @@ class TestAIDecisionMaker:
         """Test AIDecisionMaker initialization with default model."""
         ai_maker = AIDecisionMaker(api_key="test_key")
 
-        assert ai_maker.model == "gpt-4o-2024-08-06"
+        assert ai_maker.model == "gpt-4.1-mini"
 
     def test_build_system_prompt(
         self, ai_decision_maker, sample_agent, sample_world_state
@@ -227,7 +227,7 @@ class TestAIDecisionMaker:
             # Verify OpenAI was called with correct parameters
             mock_parse.assert_called_once()
             call_args = mock_parse.call_args
-            assert call_args[1]["model"] == "gpt-4o-2024-08-06"
+            assert call_args[1]["model"] == "gpt-4.1-mini"
             assert call_args[1]["response_format"] == AgentDecision
 
     @pytest.mark.asyncio

@@ -459,7 +459,7 @@ class BattleOrchestrator:
         self._initialized = False
 
         # Effect processing
-        self.effect_processor = EffectProcessor()
+        self.effect_processor = EffectProcessor(action_callback=None)
         self.game_status_manager = GameStatusManager()
 
         # Concurrent processing state
@@ -507,6 +507,16 @@ class BattleOrchestrator:
             self.orchestrator._agents.clear()
 
         self._current_tick = 0
+
+    def set_action_callback(self, callback) -> None:
+        """Set the callback for action result notifications.
+
+        Args:
+            callback: Async function with signature:
+                     async def callback(agent_id: str, action_type: str, success: bool, details: str)
+        """
+        self.effect_processor._action_callback = callback
+        self._logger.info("Action callback set for effect processor")
 
     async def _setup_battle_world(self) -> None:
         """Create initial world state with teams and map locations."""

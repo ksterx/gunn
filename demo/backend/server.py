@@ -146,6 +146,26 @@ class ConnectionManager:
         for connection in disconnected:
             self.disconnect(connection)
 
+    async def broadcast_action_result(
+        self,
+        agent_id: str,
+        action_type: str,
+        success: bool,
+        details: str = "",
+    ) -> None:
+        """Broadcast an action result to all connected clients."""
+        message = {
+            "type": "action_result",
+            "data": {
+                "agent_id": agent_id,
+                "action_type": action_type,
+                "success": success,
+                "details": details,
+            },
+            "timestamp": time.time(),
+        }
+        await self.broadcast(message)
+
 
 class BattleAPIServer:
     """FastAPI server for the battle demo with auto-startup and real-time updates."""
@@ -786,6 +806,16 @@ class BattleAPIServer:
             )
 
             if success:
+                # Connect action result callback to broadcast to WebSocket clients
+                self.orchestrator.set_action_callback(
+                    lambda agent_id, action_type, success, details: asyncio.create_task(
+                        self.connection_manager.broadcast_action_result(
+                            agent_id, action_type, success, details
+                        )
+                    )
+                )
+                logger.info("Action result callback connected")
+
                 await self._start_game_loop()
                 logger.info("Game auto-started successfully")
             else:

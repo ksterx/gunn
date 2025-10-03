@@ -17,7 +17,7 @@ class LLMProvider(StrEnum):
 
 
 AVAILABLE_MODELS = {
-    LLMProvider.OPENAI: ["gpt-4.1", "gpt-4.1-mini", "gpt-5", "gpt-5-mini"],
+    LLMProvider.OPENAI: ["gpt-4.1", "gpt-4.1-mini", "gpt-4.1", "gpt-4.1-mini"],
     LLMProvider.ANTHROPIC: [
         "claude-4-sonnet",
         "claude-4-haiku",

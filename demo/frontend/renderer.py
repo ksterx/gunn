@@ -88,6 +88,18 @@ class BattleRenderer:
         self.paused = False
         self.running = True
 
+        # Action feed (recent actions with timestamps)
+        self.action_feed: list[dict[str, any]] = []
+        self.max_action_feed_items = 5
+
+        # Agent-specific recent actions and communications
+        self.agent_recent_actions: dict[
+            str, dict
+        ] = {}  # {agent_id: {action, timestamp}}
+        self.agent_recent_communications: dict[
+            str, dict
+        ] = {}  # {agent_id: {message, timestamp}}
+
         # Network components
         self.session: aiohttp.ClientSession | None = None
         self.websocket: websockets.WebSocketServerProtocol | None = None
@@ -193,6 +205,33 @@ class BattleRenderer:
 
                     if message_type == "game_state_update":
                         await self._update_game_state(data.get("data", {}))
+                    elif message_type == "action_result":
+                        action_data = data.get("data", {})
+                        self._add_action_to_feed(action_data)
+                        # Track recent action for the agent
+                        agent_id = action_data.get("agent_id")
+                        if agent_id:
+                            self.agent_recent_actions[agent_id] = {
+                                "action_type": action_data.get("action_type", ""),
+                                "success": action_data.get("success", True),
+                                "details": action_data.get("details", ""),
+                                "timestamp": time.time(),
+                            }
+                            logger.info(
+                                f"Action recorded for {agent_id}: {action_data.get('action_type')} (success={action_data.get('success')})"
+                            )
+                    elif message_type == "team_communication":
+                        comm_data = data.get("data", {})
+                        sender_id = comm_data.get("sender_id")
+                        if sender_id:
+                            self.agent_recent_communications[sender_id] = {
+                                "message": comm_data.get("message", ""),
+                                "urgency": comm_data.get("urgency", "medium"),
+                                "timestamp": time.time(),
+                            }
+                            logger.info(
+                                f"Communication recorded for {sender_id}: {comm_data.get('message')[:30]}"
+                            )
                     elif message_type == "game_ended":
                         logger.info(f"Game ended: {data.get('data', {})}")
                     elif message_type == "keepalive":
@@ -271,6 +310,22 @@ class BattleRenderer:
             logger.error(f"Failed to fetch initial game state: {e}")
             self.error_message = f"Failed to fetch game state: {e!s}"
 
+    def _add_action_to_feed(self, action_data: dict[str, any]) -> None:
+        """Add an action result to the action feed."""
+        try:
+            # Add timestamp
+            action_data["display_time"] = time.time()
+
+            # Add to feed
+            self.action_feed.append(action_data)
+
+            # Keep only recent actions
+            if len(self.action_feed) > self.max_action_feed_items:
+                self.action_feed = self.action_feed[-self.max_action_feed_items :]
+
+        except Exception as e:
+            logger.warning(f"Error adding action to feed: {e}")
+
     def world_to_screen(self, world_pos: tuple[float, float]) -> tuple[int, int]:
         """Convert world coordinates to screen coordinates."""
         x, y = world_pos
@@ -286,7 +341,7 @@ class BattleRenderer:
         return world_x, world_y
 
     def render_agent(self, agent: Agent) -> None:
-        """Render an agent with team colors, health bar, and weapon condition."""
+        """Render an agent with team colors, health bar, weapon condition, and recent actions/communications."""
         if not self.screen:
             return
 
@@ -300,7 +355,7 @@ class BattleRenderer:
             agent_color = TEAM_COLORS.get(agent.team, TEAM_COLORS["neutral"])
 
         # Agent size based on status
-        agent_radius = 12 if agent.status == AgentStatus.ALIVE else 8
+        agent_radius = 15 if agent.status == AgentStatus.ALIVE else 10  # Larger agent
 
         # Draw agent circle
         pygame.draw.circle(self.screen, agent_color, (screen_x, screen_y), agent_radius)
@@ -308,8 +363,8 @@ class BattleRenderer:
             self.screen, self.colors["border"], (screen_x, screen_y), agent_radius, 2
         )
 
-        # Draw agent ID
-        agent_text = self.font_small.render(
+        # Draw agent ID with medium font
+        agent_text = self.font_medium.render(
             agent.agent_id.split("_")[-1], True, self.colors["text"]
         )
         text_rect = agent_text.get_rect(center=(screen_x, screen_y))
@@ -317,12 +372,81 @@ class BattleRenderer:
 
         if agent.status == AgentStatus.ALIVE:
             # Draw health bar
-            self._draw_health_bar(screen_x, screen_y - agent_radius - 15, agent.health)
+            self._draw_health_bar(screen_x, screen_y - agent_radius - 20, agent.health)
 
             # Draw weapon condition indicator
             self._draw_weapon_condition(
-                screen_x, screen_y + agent_radius + 5, agent.weapon_condition
+                screen_x, screen_y + agent_radius + 8, agent.weapon_condition
             )
+
+            # Draw recent action above agent (if any)
+            y_offset = screen_y - agent_radius - 40
+            current_time = time.time()
+
+            # Show recent action (within last 5 seconds for better visibility)
+            if agent.agent_id in self.agent_recent_actions:
+                action_info = self.agent_recent_actions[agent.agent_id]
+                age = current_time - action_info.get("timestamp", 0)
+                if age < 5.0:  # Show for 5 seconds
+                    action_type = action_info.get("action_type", "")
+                    success = action_info.get("success", True)
+
+                    # Map action types to display text
+                    action_display = {
+                        "move": "MOVE",
+                        "attack": "ATK",
+                        "heal": "HEAL",
+                        "repair": "FIX",
+                        "communicate": "MSG",
+                    }.get(action_type, action_type[:3].upper())
+
+                    action_color = (
+                        self.colors["success"] if success else self.colors["error"]
+                    )
+                    action_text = self.font_medium.render(
+                        action_display, True, action_color
+                    )
+                    text_rect = action_text.get_rect(center=(screen_x, y_offset))
+
+                    # Draw semi-transparent background
+                    bg_rect = text_rect.inflate(6, 4)
+                    bg_surface = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+                    bg_surface.fill((0, 0, 0, 200))
+                    self.screen.blit(bg_surface, bg_rect)
+
+                    self.screen.blit(action_text, text_rect)
+                    y_offset -= 20
+
+            # Show recent communication (within last 6 seconds)
+            if agent.agent_id in self.agent_recent_communications:
+                comm_info = self.agent_recent_communications[agent.agent_id]
+                age = current_time - comm_info.get("timestamp", 0)
+                if age < 6.0:  # Show for 6 seconds
+                    message = comm_info.get("message", "")
+                    urgency = comm_info.get("urgency", "medium")
+
+                    # Truncate long messages
+                    if len(message) > 25:
+                        message = message[:22] + "..."
+
+                    # Color based on urgency
+                    urgency_colors = {
+                        "low": self.colors["text_dim"],
+                        "medium": (255, 255, 150),
+                        "high": (255, 100, 100),
+                    }
+                    comm_color = urgency_colors.get(urgency, self.colors["text"])
+
+                    comm_text = self.font_medium.render(message, True, comm_color)
+                    text_rect = comm_text.get_rect(center=(screen_x, y_offset))
+
+                    # Draw semi-transparent background for readability
+                    bg_rect = text_rect.inflate(8, 4)
+                    bg_surface = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
+                    bg_surface.fill((0, 0, 0, 200))
+                    self.screen.blit(bg_surface, bg_rect)
+
+                    self.screen.blit(comm_text, text_rect)
 
             # Draw vision range (if debug mode)
             if self.show_debug_info:
@@ -538,25 +662,23 @@ class BattleRenderer:
         if not self.screen or not self.game_state or not self.show_communication:
             return
 
-        # Communication panel
-        comm_rect = pygame.Rect(10, self.window_height - 180, 450, 170)
+        # Communication panel (compact size)
+        comm_rect = pygame.Rect(10, self.window_height - 110, 350, 100)
         pygame.draw.rect(self.screen, self.colors["communication_bg"], comm_rect)
         pygame.draw.rect(self.screen, self.colors["border"], comm_rect, 2)
 
         # Title
-        title_surface = self.font_medium.render(
-            "Team Communications", True, self.colors["text"]
-        )
-        self.screen.blit(title_surface, (20, self.window_height - 175))
+        title_surface = self.font_small.render("Comms", True, self.colors["text"])
+        self.screen.blit(title_surface, (15, self.window_height - 105))
 
-        y_offset = self.window_height - 155
+        y_offset = self.window_height - 90
 
         # Collect and prioritize messages from both teams
         all_messages = []
         for team in ["team_a", "team_b"]:
-            # Get prioritized messages for each team
+            # Get prioritized messages for each team (reduced to 3)
             prioritized_messages = self.game_state.get_prioritized_team_messages(
-                team, 10
+                team, 3
             )
             for msg in prioritized_messages:
                 all_messages.append((team, msg))
@@ -572,10 +694,10 @@ class BattleRenderer:
 
         all_messages.sort(key=sort_key, reverse=True)
 
-        # Display messages (show up to 8 messages)
+        # Display messages (show up to 4 messages)
         displayed_count = 0
         for team, msg in all_messages:
-            if displayed_count >= 8:
+            if displayed_count >= 4:
                 break
 
             team_color = TEAM_COLORS.get(team, self.colors["text"])
@@ -598,46 +720,97 @@ class BattleRenderer:
                 urgency_indicator = ""
                 urgency_color = team_color
 
-            # Truncate message to fit
-            max_message_length = 45
+            # Truncate message to fit (shorter for compact UI)
+            max_message_length = 30
             if len(message_content) > max_message_length:
                 message_content = message_content[: max_message_length - 3] + "..."
 
-            # Format final message text
+            # Format final message text (compact format)
+            team_prefix = "A" if team == "team_a" else "B"
             if urgency_indicator:
-                message_text = f"{sender_name} {urgency_indicator}: {message_content}"
+                message_text = f"{team_prefix}{sender_name[-1]}{urgency_indicator}: {message_content}"
             else:
-                message_text = f"{sender_name}: {message_content}"
+                message_text = f"{team_prefix}{sender_name[-1]}: {message_content}"
 
             # Render message with urgency color for high priority messages
             display_color = urgency_color if urgency == "high" else team_color
             msg_surface = self.font_small.render(message_text, True, display_color)
-            self.screen.blit(msg_surface, (20, y_offset))
+            self.screen.blit(msg_surface, (15, y_offset))
 
-            # Add timestamp for recent messages (last 30 seconds)
-            current_time = getattr(self.game_state, "game_time", 0.0)
-            msg_time = getattr(msg, "timestamp", 0.0)
-            if current_time - msg_time < 30.0:  # Show timestamp for recent messages
-                time_text = f"({msg_time:.1f}s)"
-                time_surface = self.font_small.render(
-                    time_text, True, self.colors["text_dim"]
-                )
-                self.screen.blit(time_surface, (400, y_offset))
-
-            y_offset += 16
+            y_offset += 14
             displayed_count += 1
 
-        # Show communication stats
-        if all_messages:
-            stats_y = self.window_height - 25
-            team_a_count = len([m for t, m in all_messages if t == "team_a"])
-            team_b_count = len([m for t, m in all_messages if t == "team_b"])
+    def render_action_feed(self) -> None:
+        """Render recent action results feed."""
+        if not self.screen or not self.action_feed:
+            return
 
-            stats_text = f"Messages: Team A({team_a_count}) Team B({team_b_count})"
-            stats_surface = self.font_small.render(
-                stats_text, True, self.colors["text_dim"]
+        # Action feed panel (top-right)
+        feed_width = 280
+        feed_height = 120
+        feed_x = self.window_width - feed_width - 200  # Leave space for UI panel
+        feed_y = 10
+
+        feed_rect = pygame.Rect(feed_x, feed_y, feed_width, feed_height)
+        pygame.draw.rect(self.screen, self.colors["communication_bg"], feed_rect)
+        pygame.draw.rect(self.screen, self.colors["border"], feed_rect, 2)
+
+        # Title
+        title_surface = self.font_small.render("Actions", True, self.colors["text"])
+        self.screen.blit(title_surface, (feed_x + 5, feed_y + 5))
+
+        # Display recent actions (newest first)
+        y_offset = feed_y + 25
+        current_time = time.time()
+
+        for action in reversed(self.action_feed):
+            # Calculate age
+            age = current_time - action.get("display_time", current_time)
+
+            # Fade out old actions (older than 5 seconds)
+            if age > 5.0:
+                continue
+
+            # Extract action info
+            agent_id = action.get("agent_id", "unknown")
+            action_type = action.get("action_type", "unknown")
+            success = action.get("success", True)
+            details = action.get("details", "")
+
+            # Format agent name
+            agent_name = agent_id.split("_")[-1] if "_" in agent_id else agent_id
+            team_prefix = (
+                "A" if "team_a" in agent_id else "B" if "team_b" in agent_id else "?"
             )
-            self.screen.blit(stats_surface, (20, stats_y))
+
+            # Choose color based on success
+            if success:
+                action_color = self.colors["success"]
+                status_icon = "✓"
+            else:
+                action_color = self.colors["error"]
+                status_icon = "✗"
+
+            # Format action text
+            action_text = f"{status_icon} {team_prefix}{agent_name}: {action_type}"
+            if details:
+                action_text += (
+                    f" ({details[:15]}...)" if len(details) > 15 else f" ({details})"
+                )
+
+            # Truncate if too long
+            if len(action_text) > 35:
+                action_text = action_text[:32] + "..."
+
+            # Render action
+            action_surface = self.font_small.render(action_text, True, action_color)
+            self.screen.blit(action_surface, (feed_x + 5, y_offset))
+
+            y_offset += 16
+
+            # Stop if we run out of space
+            if y_offset > feed_y + feed_height - 10:
+                break
 
     def render_error_message(self) -> None:
         """Render error message if present."""
@@ -710,8 +883,8 @@ class BattleRenderer:
             # Render UI
             self.render_ui()
 
-            # Render team communications
-            self.render_team_communications()
+            # Render action feed (removed team communications panel)
+            self.render_action_feed()
         else:
             # Show loading message
             loading_text = self.font_large.render(

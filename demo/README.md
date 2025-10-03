@@ -183,7 +183,7 @@ uv run mypy demo/
 1. **OpenAI API Errors:**
    - Verify your API key is set correctly
    - Check your OpenAI account has sufficient credits
-   - Ensure you have access to the GPT-4 model
+   - Ensure you have access to the gpt-4.1 model
 
 2. **Pygame Display Issues:**
    - Install system dependencies for Pygame

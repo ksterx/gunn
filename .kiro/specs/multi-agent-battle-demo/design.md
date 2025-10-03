@@ -363,7 +363,7 @@ class AgentDecision(BaseModel):
 class AIDecisionMaker:
     """Handles AI decision making using OpenAI structured outputs"""
     
-    def __init__(self, openai_client, model: str = "gpt-4o-2024-08-06"):
+    def __init__(self, openai_client, model: str = "gpt-4.1-mini"):
         self.client = openai_client
         self.model = model
         

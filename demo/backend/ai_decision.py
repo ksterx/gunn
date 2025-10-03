@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class AIDecisionMaker:
     """Handles AI decision making using OpenAI structured outputs with comprehensive error handling."""
 
-    def __init__(self, api_key: str | None = None, model: str = "gpt-4o-2024-08-06"):
+    def __init__(self, api_key: str | None = None, model: str = "gpt-4.1-mini"):
         """
         Initialize the AI decision maker.
 

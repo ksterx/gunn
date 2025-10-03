@@ -565,7 +565,7 @@ class BattleConfig:
     vision_range: float = 30.0
     attack_range: float = 15.0
     movement_speed: float = 5.0
-    ai_model: str = "gpt-4o-2024-08-06"
+    ai_model: str = "gpt-4.1-mini"
     decision_timeout: float = 3.0
     
     # Gunn orchestrator config

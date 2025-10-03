@@ -5,7 +5,7 @@ This module defines the Pydantic models used for OpenAI's structured outputs,
 ensuring that AI agents make valid decisions in the battle simulation.
 """
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -14,9 +14,10 @@ class MoveAction(BaseModel):
     """Action to move to a target position."""
 
     action_type: Literal["move"] = "move"
-    target_position: tuple[float, float] = Field(
-        description="Target coordinates to move to"
-    )
+    target_position: Annotated[
+        list[float],
+        Field(description="Target coordinates as [x, y]", min_length=2, max_length=2),
+    ]
     reason: str = Field(description="Why this move is strategic", min_length=1)
 
 
