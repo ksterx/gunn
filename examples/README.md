@@ -19,7 +19,53 @@ python examples/run_all_demos.py --demo abc
 
 ## Available Examples
 
-### 1. A/B/C Conversation Demo (`abc_conversation_demo.py`)
+### 1. Comprehensive Asynchronous Multi-Agent Demo (`async_multi_agent_demo.py`) ⭐ **FLAGSHIP**
+
+**Features Demonstrated:**
+- Asynchronous agent execution with variable LLM response times
+- Natural conversation with interruption and response patterns
+- Spatial movement with position-based observations
+- Collaborative task scenarios
+- Delivery guarantees (at-least-once with acknowledgment)
+- Action completion confirmation
+- Intelligent staleness detection
+- Priority fairness and quota management
+- Temporal authority and action duration support
+- Storage consistency and replay invariance
+- Real-time visualization of agent states and decision-making
+
+**Key Requirements Addressed:**
+- 3.1, 3.2, 3.6: Asynchronous agent execution
+- 4.1, 4.2, 4.5, 4.6: Continuous observation and reactive behavior
+- 14.1-14.9: Asynchronous agent loop pattern
+- 15.1-15.6: Observation delivery guarantees
+- 16.1-16.5: Action completion confirmation
+- 17.1-17.6: Intelligent staleness detection
+- 18.1-18.5: Priority fairness and quota management
+- 19.1-19.5: Temporal authority and action duration
+- 20.1-20.5: Storage consistency and replay invariance
+
+**Usage:**
+```bash
+python examples/async_multi_agent_demo.py
+```
+
+**What You'll See:**
+- 5 agents with different personalities and response times
+- Agents responding at different speeds (0.10s to 0.25s)
+- Natural conversation patterns without turn-taking
+- Spatial movement and position-based observations
+- Collaborative behavior emerging from interactions
+- Environmental events triggering agent responses
+- Real-time status updates every 15 seconds
+- Comprehensive final summary with all statistics
+- Verification of all critical specifications
+
+**Documentation:**
+- [Comprehensive Demo Guide](../docs/async_multi_agent_demo.md)
+- [Asynchronous Agent Development Tutorial](../docs/async_agent_development_tutorial.md)
+
+### 2. A/B/C Conversation Demo (`abc_conversation_demo.py`)
 
 **Features Demonstrated:**
 - Multi-agent conversation with partial observation

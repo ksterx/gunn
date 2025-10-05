@@ -1,15 +1,15 @@
-# gunn ドキュメント
+# gunn Documentation
 
-`gunn` はイベント駆動のマルチエージェント・オーケストレーションコアです。このサイトではプロダクトの全体像、技術的なディテール、統合パターン、そして API 参照への入り口をまとめています。
+`gunn` is an event-driven multi-agent orchestration core. This site provides a comprehensive overview of the product, technical details, integration patterns, and API reference.
 
-## スタートガイド
+## Getting Started
 
-- リポジトリのセットアップは `README.md` と `CONTRIBUTING.md` を参照してください。
-- ドキュメントの構成は下記のナビゲーション、またはページ右側の目次から辿れます。
+- For repository setup, refer to `README.md` and `CONTRIBUTING.md`.
+- Navigate through the documentation using the menu below or the table of contents on the right side of each page.
 
-## ビルドとデプロイ
+## Build and Deploy
 
-GitHub Pages に公開する場合はルートディレクトリから次のコマンドを実行し、`docs/_build/html` を Pages の公開対象に設定してください。
+To publish to GitHub Pages, run the following commands from the root directory and configure Pages to serve from `docs/_build/html`:
 
 ```bash
 uv sync --group docs
@@ -17,7 +17,7 @@ uv run sphinx-build -b html docs docs/_build/html
 ```
 
 ```{toctree}
-:caption: ガイド
+:caption: Guides
 :maxdepth: 2
 :hidden:
 

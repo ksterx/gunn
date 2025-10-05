@@ -7,6 +7,7 @@
 - **Partial Observation**: Agents see only what they should based on distance, relationships, and policies
 - **Concurrent Execution**: Multiple agents can act simultaneously without blocking each other
 - **Intelligent Interruption**: Agents can interrupt and regenerate responses when new relevant information arrives
+- **Intelligent Staleness Detection**: Intent-specific staleness logic prevents false positives and reduces LLM costs
 - **Event-Driven Architecture**: Unified core with deterministic ordering and complete audit trails
 - **Dual API Facades**: Both RL-style (`env.step()`) and message-oriented (`env.emit()`) interfaces
 - **Real-time Streaming**: Token-level streaming with sub-100ms cancellation response

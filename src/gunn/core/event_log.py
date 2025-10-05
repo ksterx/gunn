@@ -38,16 +38,59 @@ class EventLogEntry(BaseModel):
 
 
 class EventLog:
-    """Append-only event log with hash chain integrity.
+    """Append-only event log with hash chain integrity for deterministic replay.
 
-    Provides thread-safe append operations, replay capabilities, and
-    integrity verification through hash chaining.
+    EventLog provides an immutable, ordered sequence of all effects in the simulation
+    with cryptographic hash chaining for integrity verification. It enables complete
+    deterministic replay for debugging, analysis, and auditability.
 
-    Requirements addressed:
+    Core Features
+    -------------
+    - **Append-only**: Effects can only be added, never modified or deleted
+    - **Hash Chaining**: Each entry includes hash of previous entry for tamper detection
+    - **Sequential Ordering**: Global sequence numbers ensure total ordering
+    - **Thread Safety**: All operations are protected with async locks
+    - **Replay Support**: Complete log can be replayed to reconstruct world state
+    - **Integrity Verification**: Detect gaps, corruption, or tampering
+
+    Hash Chain Mechanism
+    --------------------
+    Each log entry contains:
+    - global_seq: Monotonically increasing sequence number
+    - effect: The effect being logged
+    - prev_hash: SHA-256 hash of previous entry
+    - timestamp: When the entry was created
+
+    The hash chain ensures:
+    - Any modification breaks the chain and is detectable
+    - Sequence gaps are immediately visible
+    - Complete audit trail for compliance
+
+    Replay Capabilities
+    -------------------
+    The log supports:
+    - Full replay from sequence 0 to reconstruct world state
+    - Partial replay from checkpoint to specific sequence
+    - Parallel replay for analysis and testing
+    - Export to external audit systems
+
+    Requirements Addressed
+    ----------------------
     - 1.2: Record events in global sequential log with global_seq identifier
     - 7.1: Maintain complete sequential log with global_seq numbers
     - 7.3: Provide replay capabilities from event log
     - 7.5: Validate state consistency using log hash/CRC and sequence gap detection
+
+    Examples
+    --------
+    >>> log = EventLog(world_id="demo")
+    >>> seq = await log.append(effect)
+    >>> entries = await log.get_range(0, seq)
+    >>> is_valid = await log.verify_integrity()
+
+    See Also
+    --------
+    Orchestrator : Uses EventLog for all effect storage
     """
 
     def __init__(self, world_id: str = "default") -> None:
@@ -191,13 +234,20 @@ class EventLog:
         """
         return len(self._entries)
 
-    def validate_integrity(self) -> dict[str, Any]:
+    def validate_integrity(
+        self, include_replay_check: bool = False, current_state: Any = None
+    ) -> dict[str, Any]:
         """Validate complete log integrity.
 
         Performs comprehensive integrity checks including:
         - Hash chain validation
         - Sequence gap detection
         - Corruption analysis
+        - Optional replay equivalence validation (note: replay check not available in async context)
+
+        Args:
+            include_replay_check: If True, validate replay equivalence (only works in sync context)
+            current_state: Current world state for replay comparison (required if include_replay_check=True)
 
         Returns:
             Dictionary with integrity report containing:
@@ -205,7 +255,11 @@ class EventLog:
             - corrupted_entries: List of corrupted entry indices
             - missing_sequences: List of detected sequence gaps
             - total_entries: Total number of entries checked
+            - replay_valid: Whether replay equivalence check passed (if performed)
             - details: Additional diagnostic information
+
+        Note:
+            For async contexts, use validate_integrity_async() instead to enable replay checking.
         """
         with PerformanceTimer("event_log_validate", record_metrics=True):
             corrupted_entries: list[int] = []
@@ -246,15 +300,121 @@ class EventLog:
                 },
             }
 
+            # Perform replay equivalence check if requested
+            if include_replay_check:
+                if current_state is None:
+                    self._logger.warning(
+                        "Replay check requested but no current_state provided"
+                    )
+                    result["replay_valid"] = None
+                    result["replay_error"] = "No current state provided for comparison"
+                else:
+                    try:
+                        # Import here to avoid circular dependency
+                        from gunn.utils.replay_invariance import (
+                            ReplayInvarianceValidator,
+                        )
+
+                        validator = ReplayInvarianceValidator(self.world_id)
+
+                        # Run async validation in sync context
+                        import asyncio
+
+                        try:
+                            loop = asyncio.get_event_loop()
+                        except RuntimeError:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+
+                        if loop.is_running():
+                            # If loop is running, we can't use run_until_complete
+                            self._logger.warning(
+                                "Cannot perform replay check in running event loop - use validate_integrity_async() instead"
+                            )
+                            result["replay_valid"] = None
+                            result["replay_error"] = (
+                                "Cannot run async validation in sync context - use validate_integrity_async()"
+                            )
+                        else:
+                            replay_report = loop.run_until_complete(
+                                validator.validate_replay_invariance(
+                                    self, current_state
+                                )
+                            )
+                            result["replay_valid"] = replay_report.valid
+                            result["replay_violations"] = len(replay_report.violations)
+                            result["replay_hash_match"] = (
+                                replay_report.incremental_hash
+                                == replay_report.full_replay_hash
+                            )
+
+                            # Update overall validity
+                            is_valid = is_valid and replay_report.valid
+                            result["valid"] = is_valid
+
+                    except Exception as e:
+                        self._logger.error(
+                            "Replay equivalence check failed", error=str(e)
+                        )
+                        result["replay_valid"] = False
+                        result["replay_error"] = str(e)
+                        is_valid = False
+                        result["valid"] = is_valid
+
             self._logger.info(
                 "Log integrity validation completed",
                 valid=is_valid,
                 corrupted_count=len(corrupted_entries),
                 missing_count=len(missing_sequences),
                 total_entries=len(self._entries),
+                replay_check=include_replay_check,
             )
 
             return result
+
+    async def validate_integrity_async(
+        self, include_replay_check: bool = False, current_state: Any = None
+    ) -> dict[str, Any]:
+        """Async version of validate_integrity that supports replay checking.
+
+        This method should be used in async contexts when replay checking is needed.
+
+        Args:
+            include_replay_check: If True, validate replay equivalence
+            current_state: Current world state for replay comparison
+
+        Returns:
+            Dictionary with integrity report (same format as validate_integrity)
+        """
+        # First do the basic integrity checks
+        result = self.validate_integrity(include_replay_check=False)
+
+        # Then do replay check if requested
+        if include_replay_check and current_state is not None:
+            try:
+                from gunn.utils.replay_invariance import ReplayInvarianceValidator
+
+                validator = ReplayInvarianceValidator(self.world_id)
+                replay_report = await validator.validate_replay_invariance(
+                    self, current_state
+                )
+
+                result["replay_valid"] = replay_report.valid
+                result["replay_violations"] = len(replay_report.violations)
+                result["replay_hash_match"] = (
+                    replay_report.incremental_hash == replay_report.full_replay_hash
+                )
+
+                # Update overall validity
+                result["valid"] = result["valid"] and replay_report.valid
+
+            except Exception as e:
+                self._logger.error("Replay equivalence check failed", error=str(e))
+                result["replay_valid"] = False
+                result["replay_error"] = str(e)
+                result["valid"] = False
+
+        return result
 
     def find_entry_by_uuid(self, effect_uuid: str) -> EventLogEntry | None:
         """Find entry by effect UUID.

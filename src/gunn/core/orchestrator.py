@@ -9,8 +9,11 @@ import asyncio
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from typing import Any, Literal, Protocol
 
+# Import AsyncAgentLogic with TYPE_CHECKING to avoid circular imports
+from typing import TYPE_CHECKING, Any, Literal, Protocol
+
+from gunn.core.completion_tracker import ActionCompletionTracker
 from gunn.core.concurrent_processor import (
     BatchResult,
     ConcurrentIntentProcessor,
@@ -29,6 +32,7 @@ from gunn.schemas.types import (
 )
 from gunn.storage.dedup_store import DedupStore, InMemoryDedupStore
 from gunn.utils.backpressure import backpressure_manager
+from gunn.utils.delivery import DeliveryTracker
 from gunn.utils.errors import (
     BackpressureError,
     QuotaExceededError,
@@ -55,6 +59,9 @@ from gunn.utils.telemetry import (
     update_view_seq,
 )
 from gunn.utils.timing import TimedQueue
+
+if TYPE_CHECKING:
+    from gunn.core.agent_logic import AsyncAgentLogic
 
 
 class EffectValidator(Protocol):
@@ -812,10 +819,35 @@ class DefaultEffectValidator:
 
 
 class AgentHandle:
-    """Per-agent interface for observation and intent submission.
+    """Per-agent interface for observation retrieval and intent submission.
 
-    Provides isolated interface for each agent with view sequence tracking
-    and non-blocking operations.
+    AgentHandle provides an isolated, non-blocking interface for each registered agent
+    to interact with the simulation. It manages view sequence tracking, observation
+    queuing, and intent submission while maintaining proper isolation between agents.
+
+    Key Features
+    ------------
+    - **View Sequence Tracking**: Maintains current view_seq for staleness detection
+    - **Non-blocking Operations**: All operations are async and don't block other agents
+    - **Observation Queue**: Dedicated queue for receiving observation deltas
+    - **Intent Submission**: Convenient interface for submitting intents to orchestrator
+    - **Agent Lifecycle**: Supports run loops for autonomous agent logic
+
+    Examples
+    --------
+    >>> orchestrator = Orchestrator(config)
+    >>> await orchestrator.initialize()
+    >>> agent = await orchestrator.register_agent("alice", policy)
+    >>> await agent.submit_intent({
+    ...     "kind": "Speak",
+    ...     "payload": {"text": "Hello!"},
+    ...     "context_seq": agent.view_seq,
+    ...     "req_id": "req_1",
+    ...     "agent_id": "alice",
+    ...     "priority": 1,
+    ...     "schema_version": "1.0.0"
+    ... })
+    >>> observation = await agent.next_observation()
     """
 
     def __init__(self, agent_id: str, orchestrator: "Orchestrator"):
@@ -828,6 +860,8 @@ class AgentHandle:
         self.agent_id = agent_id
         self.orchestrator = orchestrator
         self.view_seq: int = 0
+        self._running: bool = False
+        self._agent_logic: AsyncAgentLogic | None = None
 
     async def next_observation(self) -> Any:
         """Get next observation delta from orchestrator's timed queue.
@@ -891,6 +925,177 @@ class AgentHandle:
         """
         return self.view_seq
 
+    async def get_current_observation(self) -> Any:
+        """Get current world state view for this agent.
+
+        This method provides immediate access to the current world state
+        without waiting for deltas. Useful for agents that need to check
+        the current state before deciding on actions.
+
+        Returns:
+            Current View of the world state for this agent
+
+        Raises:
+            RuntimeError: If agent is not registered
+
+        Requirements addressed:
+        - 14.1: Agent observes current world state
+        - 14.2: Agent receives information about other agents' locations and actions
+        """
+        if self.agent_id not in self.orchestrator.observation_policies:
+            raise RuntimeError(f"Agent {self.agent_id} is not registered")
+
+        async with async_performance_timer(
+            "get_current_observation",
+            agent_id=self.agent_id,
+            view_seq=self.view_seq,
+            logger=self.orchestrator._logger,
+            tracer_name="gunn.agent_handle",
+        ):
+            policy = self.orchestrator.observation_policies[self.agent_id]
+            return policy.filter_world_state(
+                self.orchestrator.world_state, self.agent_id
+            )
+
+    async def run_async_loop(self, agent_logic: "AsyncAgentLogic") -> None:
+        """Run the asynchronous observe-think-act loop for this agent.
+
+        This method implements the core asynchronous agent execution pattern:
+        1. Observe current world state
+        2. Let agent logic process observation and generate intent
+        3. Submit intent and wait for completion
+        4. Repeat until stopped
+
+        Args:
+            agent_logic: Agent logic implementation to use for processing observations
+
+        Raises:
+            RuntimeError: If agent is not registered
+            Exception: Any error from agent logic processing
+
+        Requirements addressed:
+        - 14.1: Agent enters observe-think-act loop until stopped
+        - 14.3: Agent uses LLM to generate next action based on observations
+        - 14.4: Agent submits intent and immediately returns to observing
+        - 14.5: Agents operate independently without synchronization barriers
+        """
+        if self.agent_id not in self.orchestrator.observation_policies:
+            raise RuntimeError(f"Agent {self.agent_id} is not registered")
+
+        self._running = True
+        self._agent_logic = agent_logic
+
+        try:
+            # Notify agent logic that loop is starting
+            await agent_logic.on_loop_start(self.agent_id)
+
+            self.orchestrator._logger.info(
+                "Agent async loop started",
+                agent_id=self.agent_id,
+                logic_type=type(agent_logic).__name__,
+            )
+
+            while self._running:
+                try:
+                    # 1. Observe current world state
+                    observation = await self.get_current_observation()
+
+                    # 2. Let agent logic process observation and generate intent
+                    intent = await agent_logic.process_observation(
+                        observation, self.agent_id
+                    )
+
+                    if intent:
+                        # 3. Submit intent and wait for completion
+                        req_id = await self.submit_intent(intent)
+
+                        # 4. Wait for the action to be processed
+                        await self._wait_for_action_completion(req_id)
+
+                    # Small delay to prevent busy waiting
+                    await asyncio.sleep(0.1)
+
+                except Exception as e:
+                    # Let agent logic handle the error
+                    should_continue = await agent_logic.on_error(self.agent_id, e)
+                    if not should_continue:
+                        self.orchestrator._logger.error(
+                            "Agent async loop stopped due to error",
+                            agent_id=self.agent_id,
+                            error=str(e),
+                            error_type=type(e).__name__,
+                        )
+                        break
+
+        finally:
+            self._running = False
+            # Notify agent logic that loop is stopping
+            await agent_logic.on_loop_stop(self.agent_id)
+
+            self.orchestrator._logger.info(
+                "Agent async loop stopped", agent_id=self.agent_id
+            )
+
+    def stop_async_loop(self) -> None:
+        """Stop the asynchronous agent loop gracefully.
+
+        This method signals the async loop to stop after the current iteration.
+        The loop will complete any in-progress action before stopping.
+
+        Requirements addressed:
+        - 14.5: Graceful agent shutdown
+        """
+        self._running = False
+        self.orchestrator._logger.info(
+            "Agent async loop stop requested", agent_id=self.agent_id
+        )
+
+    async def ack_observation(self, delivery_id: str) -> bool:
+        """Acknowledge receipt of an observation to prevent redelivery.
+
+        Args:
+            delivery_id: Unique delivery identifier
+
+        Returns:
+            True if acknowledgment was successful, False if delivery not found
+        """
+        return await self.orchestrator.ack_observation(self.agent_id, delivery_id)
+
+    async def _wait_for_action_completion(self, req_id: str) -> None:
+        """Wait for the submitted action to be processed and reflected in world state.
+
+        This method ensures that actions are fully processed before the agent
+        continues to the next observation, maintaining consistency in the
+        observe-think-act loop.
+
+        Args:
+            req_id: Request ID of the action to wait for
+
+        Requirements addressed:
+        - 14.4: Ensure actions are processed before next observation
+        - 14.6: Agent immediately re-observes after action completion
+        """
+        try:
+            # Wait for the effect to be applied with a reasonable timeout
+            await self.orchestrator.wait_effect_applied(req_id, timeout=30.0)
+        except TimeoutError:
+            # Log timeout but continue - agent can still observe and react
+            self.orchestrator._logger.warning(
+                "Action completion timeout",
+                agent_id=self.agent_id,
+                req_id=req_id,
+                timeout_seconds=30.0,
+            )
+        except Exception as e:
+            # Log error but continue - agent can still observe and react
+            self.orchestrator._logger.warning(
+                "Error waiting for action completion",
+                agent_id=self.agent_id,
+                req_id=req_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+
 
 class OrchestratorConfig:
     """Configuration for the Orchestrator."""
@@ -913,6 +1118,12 @@ class OrchestratorConfig:
         quota_tokens_per_minute: int = 10000,
         use_in_memory_dedup: bool = False,
         processing_idle_shutdown_ms: float = 250.0,
+        action_completion_timeout: float = 30.0,
+        # Delivery guarantee settings
+        delivery_initial_timeout: float = 5.0,
+        delivery_max_timeout: float = 60.0,
+        delivery_backoff_multiplier: float = 2.0,
+        delivery_max_attempts: int = 5,
         # Memory management settings
         max_log_entries: int = 10000,
         view_cache_size: int = 1000,
@@ -943,6 +1154,11 @@ class OrchestratorConfig:
             quota_tokens_per_minute: Token quota per agent per minute
             use_in_memory_dedup: Use in-memory dedup store for testing
             processing_idle_shutdown_ms: Idle duration before background intent loop auto-stops (<=0 disables)
+            action_completion_timeout: Default timeout for action completion tracking
+            delivery_initial_timeout: Initial timeout before first redelivery attempt
+            delivery_max_timeout: Maximum timeout between redelivery attempts
+            delivery_backoff_multiplier: Multiplier for exponential backoff
+            delivery_max_attempts: Maximum delivery attempts before giving up
             max_log_entries: Maximum number of log entries before compaction
             view_cache_size: Maximum size of view cache
             compaction_threshold: Threshold for triggering log compaction
@@ -967,6 +1183,12 @@ class OrchestratorConfig:
         self.quota_tokens_per_minute = quota_tokens_per_minute
         self.use_in_memory_dedup = use_in_memory_dedup
         self.processing_idle_shutdown_ms = processing_idle_shutdown_ms
+        self.action_completion_timeout = action_completion_timeout
+        # Delivery guarantee settings
+        self.delivery_initial_timeout = delivery_initial_timeout
+        self.delivery_max_timeout = delivery_max_timeout
+        self.delivery_backoff_multiplier = delivery_backoff_multiplier
+        self.delivery_max_attempts = delivery_max_attempts
         # Memory management settings
         self.max_log_entries = max_log_entries
         self.view_cache_size = view_cache_size
@@ -982,18 +1204,112 @@ class OrchestratorConfig:
 
 
 class Orchestrator:
-    """Central coordinator for multi-agent simulation.
+    """Central coordinator for multi-agent simulation with deterministic ordering.
 
-    Coordinates all system operations including event ingestion and ordering,
-    view generation and delta distribution, intent validation and effect creation,
-    and cancellation token management.
+    The Orchestrator is the core component that manages all aspects of the multi-agent
+    simulation environment. It provides a controlled interface for agent-environment
+    interaction, supporting both single and multi-agent settings with partial observation,
+    concurrent execution, and intelligent interruption capabilities.
 
-    Requirements addressed:
-    - 1.1: Create WorldState as single source of truth
-    - 1.3: Generate View based on agent's observation policy
-    - 1.4: Process events using deterministic ordering
-    - 9.1: Deterministic ordering using (sim_time, priority, source_id, uuid) tuple
-    - 9.3: Fixed tie-breaker: priority > source > UUID lexicographic
+    Core Responsibilities
+    ---------------------
+    - **Event Management**: Ingests, orders, and processes all events with deterministic
+      ordering guarantees using (sim_time, priority, source_id, uuid) tuples.
+    - **World State Maintenance**: Maintains the authoritative WorldState as the single
+      source of truth, updated through append-only event log.
+    - **Agent Registration**: Registers agents with their observation policies and manages
+      agent lifecycles through AgentHandle instances.
+    - **Intent Processing**: Validates, deduplicates, and processes agent intents through
+      a multi-stage pipeline with quota enforcement and backpressure management.
+    - **Observation Distribution**: Generates partial observations for each agent based on
+      their observation policies and distributes deltas via JSON Patch.
+    - **Cancellation Management**: Issues and tracks cancellation tokens for interrupting
+      stale or outdated operations, especially for LLM streaming.
+    - **Effect Handling**: Validates and applies effects to the world state, with support
+      for custom effect handlers and validators.
+
+    Key Features
+    ------------
+    - **Deterministic Replay**: All events are logged with hash-chain integrity, enabling
+      complete replay for debugging and analysis.
+    - **Partial Observation**: Each agent sees only what their observation policy permits,
+      based on distance, relationships, and custom filters.
+    - **Concurrent Processing**: Multiple agents can submit intents concurrently without
+      blocking, with configurable concurrency limits and fairness guarantees.
+    - **Intelligent Interruption**: Staleness detection automatically cancels outdated
+      operations when new relevant information arrives.
+    - **Memory Management**: Automatic compaction, snapshotting, and view caching to
+      manage memory usage in long-running simulations.
+    - **Telemetry Integration**: Comprehensive logging, metrics, and tracing support
+      for observability and performance monitoring.
+
+    Architecture
+    ------------
+    The Orchestrator implements a two-phase processing pipeline:
+
+    1. **Intent Submission Phase**:
+       - Idempotency check via deduplication store
+       - Quota and rate limit enforcement
+       - Backpressure policy application
+       - Weighted round-robin scheduling
+
+    2. **Effect Application Phase**:
+       - Effect validation through EffectValidator
+       - World state update with hash-chain logging
+       - Observation delta generation per agent
+       - Distribution to agent observation queues
+
+    Concurrency Model
+    -----------------
+    The Orchestrator uses asyncio for concurrency with the following guarantees:
+    - Lock-free reads for world state queries
+    - Sequential writes to event log for consistency
+    - Per-agent intent queues to prevent head-of-line blocking
+    - Configurable concurrent intent processing with fairness
+
+    Requirements Addressed
+    ----------------------
+    - 1.1: WorldState as single source of truth
+    - 1.3: View generation based on agent observation policies
+    - 1.4: Deterministic event processing with total ordering
+    - 9.1: Ordering key: (sim_time, priority, source_id, uuid)
+    - 9.3: Tie-breaker: priority > source > UUID lexicographic
+
+    Examples
+    --------
+    Basic orchestrator setup with agent registration:
+
+    >>> config = OrchestratorConfig(
+    ...     max_agents=100,
+    ...     staleness_threshold=0,
+    ...     debounce_ms=50.0
+    ... )
+    >>> orchestrator = Orchestrator(config, world_id="demo")
+    >>> await orchestrator.initialize()
+    >>>
+    >>> # Register agents with observation policies
+    >>> policy = ObservationPolicy(distance_limit=10.0)
+    >>> agent = await orchestrator.register_agent("alice", policy)
+    >>>
+    >>> # Submit intent and observe results
+    >>> intent = {
+    ...     "kind": "Speak",
+    ...     "payload": {"text": "Hello!"},
+    ...     "context_seq": 0,
+    ...     "req_id": "req_1",
+    ...     "agent_id": "alice",
+    ...     "priority": 1,
+    ...     "schema_version": "1.0.0"
+    ... }
+    >>> await orchestrator.submit_intent(intent)
+    >>> observation = await agent.next_observation()
+
+    See Also
+    --------
+    AgentHandle : Per-agent interface for observation and intent submission
+    ObservationPolicy : Configures partial observation filtering
+    EffectValidator : Validates effects before world state application
+    EventLog : Append-only log with hash-chain integrity
     """
 
     def __init__(
@@ -1070,6 +1386,19 @@ class Orchestrator:
         self._system_monitoring_task: asyncio.Task[None] | None = None
         self._shutdown_event = asyncio.Event()
 
+        # Action completion tracking
+        self._completion_tracker = ActionCompletionTracker(
+            default_timeout=config.action_completion_timeout
+        )
+
+        # Delivery tracking for at-least-once guarantees
+        self._delivery_tracker = DeliveryTracker(
+            initial_timeout=config.delivery_initial_timeout,
+            max_timeout=config.delivery_max_timeout,
+            backoff_multiplier=config.delivery_backoff_multiplier,
+            max_attempts=config.delivery_max_attempts,
+        )
+
         # Cancellation and staleness detection enhancements
         self._last_cancellation_time: dict[str, float] = {}  # agent_id -> timestamp
         self._agent_interrupt_policies: dict[
@@ -1131,6 +1460,9 @@ class Orchestrator:
             # Initialize deduplication store and reset shutdown state
             await self._dedup_store.initialize()
             self._shutdown_event.clear()
+
+            # Start delivery tracker
+            await self._delivery_tracker.start()
 
             # Start system monitoring task
             if hasattr(self, "_monitor_system_func"):
@@ -1327,7 +1659,9 @@ class Orchestrator:
             policy=policy_name,
         )
 
-    async def broadcast_event(self, draft: EffectDraft) -> None:
+    async def broadcast_event(
+        self, draft: EffectDraft, req_id: str | None = None
+    ) -> None:
         """Create complete effect from draft and distribute observations.
 
         Converts EffectDraft to complete Effect with priority completion,
@@ -1336,6 +1670,7 @@ class Orchestrator:
 
         Args:
             draft: Effect draft to process and broadcast
+            req_id: Optional request ID for tracking action completion
 
         Raises:
             ValueError: If draft is missing required fields
@@ -1345,6 +1680,7 @@ class Orchestrator:
         - 2.5: Incremental updates via ObservationDelta patches
         - 6.4: ObservationDelta delivery latency ≤ 20ms
         - 6.5: Timed delivery using per-agent TimedQueues with latency models
+        - 16.1: Track intent-to-effect completion with req_id
         """
         # Enhanced telemetry for broadcast_event
         async with async_performance_timer(
@@ -1377,10 +1713,17 @@ class Orchestrator:
                 "schema_version": draft["schema_version"],
                 "sim_time": self._current_sim_time(),
                 "global_seq": self._next_seq(),
+                "req_id": req_id,
+                "duration_ms": None,
+                "apply_at": None,
             }
 
+            # Register action for completion tracking if req_id is provided
+            if req_id:
+                self._completion_tracker.register_action(req_id)
+
             # Append to event log with world_id in source_metadata
-            await self.event_log.append(effect, req_id=None)
+            await self.event_log.append(effect, req_id=req_id)
 
             # Update world state based on effect
             await self._apply_effect_to_world_state(effect)
@@ -2240,8 +2583,8 @@ class Orchestrator:
                 "schema_version": intent.get("schema_version", "1.0.0"),
             }
 
-            # Broadcast the effect (this will assign the global_seq)
-            await self.broadcast_event(effect_draft)
+            # Broadcast the effect (this will assign the global_seq and track completion)
+            await self.broadcast_event(effect_draft, req_id=req_id)
 
             processing_time_ms = (time.perf_counter() - start_time) * 1000
 
@@ -2478,6 +2821,18 @@ class Orchestrator:
                 global_seq=effect["global_seq"],
             )
 
+            # Complete action tracking if req_id is present
+            # Requirement 16.2: Automatic EffectApplied event emission
+            req_id = effect.get("req_id")
+            if req_id:
+                await self._completion_tracker.complete_action(req_id, effect)
+                self._logger.debug(
+                    "Action completion tracked",
+                    req_id=req_id,
+                    effect_kind=effect_kind,
+                    global_seq=effect["global_seq"],
+                )
+
         except Exception as e:
             self._logger.error(
                 "Failed to apply effect to world state",
@@ -2487,6 +2842,12 @@ class Orchestrator:
                 error=str(e),
                 error_type=type(e).__name__,
             )
+
+            # Fail action tracking if req_id is present
+            req_id = effect.get("req_id")
+            if req_id:
+                await self._completion_tracker.fail_action(req_id, e)
+
             # Don't re-raise - world state update failures shouldn't break observation distribution
 
     async def _distribute_observations(self, effect: Effect) -> None:
@@ -2553,6 +2914,8 @@ class Orchestrator:
                         ],
                         context_digest=new_view.context_digest,
                         schema_version="1.0.0",
+                        delivery_id="",  # Will be set by delivery tracker
+                        redelivery=False,
                     )
                 else:
                     # Generate incremental delta
@@ -2566,12 +2929,20 @@ class Orchestrator:
                     effect["source_id"], agent_id, effect
                 )
 
-                # Schedule delivery via timed queue
-                agent_queue = self._per_agent_queues[agent_id]
-                loop = asyncio.get_running_loop()
-                deliver_at = loop.time() + delivery_delay
+                # Define delivery callback for the timed queue
+                async def deliver_to_queue(delta: ObservationDelta) -> None:
+                    agent_queue = self._per_agent_queues[agent_id]
+                    loop = asyncio.get_running_loop()
+                    deliver_at = loop.time() + delivery_delay
+                    await agent_queue.put_at(deliver_at, delta)
 
-                await agent_queue.put_at(deliver_at, observation_delta)
+                # Track delivery with at-least-once guarantee
+                delivery_id = await self._delivery_tracker.track_delivery(
+                    agent_id, observation_delta, deliver_to_queue
+                )
+
+                # Update observation delta with delivery ID
+                observation_delta["delivery_id"] = delivery_id
 
                 # Record observation delivery latency and bandwidth
                 record_observation_delivery_latency(agent_id, delivery_delay)
@@ -2794,6 +3165,8 @@ class Orchestrator:
             patches=patches,
             context_digest=new_view.context_digest,
             schema_version="1.0.0",
+            delivery_id="",  # Will be set by delivery tracker
+            redelivery=False,
         )
 
     def get_memory_stats(self) -> dict[str, Any]:
@@ -2861,6 +3234,12 @@ class Orchestrator:
             finally:
                 self._system_monitoring_task = None
 
+        # Cancel all pending action completions
+        self._completion_tracker.cancel_all()
+
+        # Shutdown delivery tracker
+        await self._delivery_tracker.shutdown()
+
         # Close deduplication store
         await self._dedup_store.close()
 
@@ -2881,6 +3260,82 @@ class Orchestrator:
         self._initialized = False
         self._initialize_lock = None
         self._logger.info("Orchestrator shutdown complete")
+
+    async def ack_observation(self, agent_id: str, delivery_id: str) -> bool:
+        """Acknowledge receipt of an observation to prevent redelivery.
+
+        Args:
+            agent_id: Agent acknowledging the observation
+            delivery_id: Unique delivery identifier
+
+        Returns:
+            True if acknowledgment was successful, False if delivery not found
+        """
+        success = await self._delivery_tracker.acknowledge(delivery_id)
+
+        if success:
+            self._logger.debug(
+                "Observation acknowledged",
+                agent_id=agent_id,
+                delivery_id=delivery_id,
+            )
+        else:
+            self._logger.warning(
+                "Failed to acknowledge observation - delivery not found",
+                agent_id=agent_id,
+                delivery_id=delivery_id,
+            )
+
+        return success
+
+    async def wait_effect_applied(
+        self, req_id: str, timeout: float | None = None
+    ) -> Effect:
+        """Wait for EffectApplied confirmation for the given req_id.
+
+        This method waits for an effect with the specified req_id to be applied
+        to the world state, providing confirmation that an action has been processed.
+
+        Args:
+            req_id: Request ID to wait for
+            timeout: Maximum time to wait in seconds (None for no timeout)
+
+        Returns:
+            The Effect that was applied
+
+        Raises:
+            asyncio.TimeoutError: If timeout is reached before effect is applied
+            ValueError: If req_id is empty or not registered
+
+        Requirements addressed:
+        - 16.2: Automatic EffectApplied event emission when effects are applied
+        - 16.3: Wait for effect completion with timeout handling
+        - 16.4: Provide completion confirmation to agents
+        """
+        if not req_id.strip():
+            raise ValueError("req_id cannot be empty")
+
+        # Use the completion tracker for efficient waiting
+        try:
+            effect = await self._completion_tracker.wait_for_completion(req_id, timeout)
+
+            self._logger.debug(
+                "Effect completion confirmed",
+                req_id=req_id,
+                effect_kind=effect.get("kind"),
+                global_seq=effect.get("global_seq"),
+            )
+
+            return effect
+
+        except ValueError:
+            # Action not registered - check if it's already in the event log
+            for entry in self.event_log._entries:
+                if entry.req_id == req_id:
+                    return entry.effect
+
+            # Not found anywhere
+            raise ValueError(f"Action with req_id {req_id} not found")
 
     def _start_system_monitoring(self) -> None:
         """Start background system monitoring task."""

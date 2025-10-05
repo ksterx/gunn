@@ -992,23 +992,22 @@ class BattleAPIServer:
             logger.info("Game loop ended")
 
     async def _process_game_tick(self) -> None:
-        """Process one game tick with concurrent agent decisions and effect processing."""
+        """Process one game tick with state updates.
+
+        Note: Agent decisions and effect processing are now handled independently
+        by async agent loops and the orchestrator. This method only updates
+        game time and checks win conditions.
+        """
         try:
             # Update game time
             self.orchestrator.world_state.game_time += self.game_tick_rate
 
-            # Process concurrent agent decisions
-            agent_decisions = await self.orchestrator.process_concurrent_decisions()
+            # Sync our world state with Gunn's world state
+            # (Effects are already being applied by the orchestrator)
+            await self.orchestrator._sync_world_state()
 
-            if agent_decisions:
-                # Process effects from agent actions
-                await self._process_agent_effects(agent_decisions)
-
-                # Update world state in Gunn
-                await self.orchestrator._sync_world_state()
-
-                # Check and update win condition
-                self.orchestrator.world_state.update_game_status()
+            # Check and update win condition
+            self.orchestrator.world_state.update_game_status()
 
         except Exception as e:
             logger.error(f"Error processing game tick: {e}")
@@ -1149,17 +1148,27 @@ class BattleAPIServer:
         """Broadcast current game state to all WebSocket connections with error recovery."""
         try:
             if not self.connection_manager.active_connections:
+                logger.debug("[BROADCAST] No active WebSocket connections")
                 return
 
             # Use error handler for network operations
             async def broadcast_operation():
                 game_state = self._serialize_game_state()
+
+                # Log agent positions being broadcast
+                logger.info("[BROADCAST] Broadcasting agent positions:")
+                for agent_id, agent in game_state.agents.items():
+                    logger.info(f"  {agent_id}: {agent.position}")
+
                 message = {
                     "type": "game_state_update",
                     "data": game_state.model_dump(),
                     "timestamp": time.time(),
                 }
                 await self.connection_manager.broadcast(message)
+                logger.info(
+                    f"[BROADCAST] Sent to {len(self.connection_manager.active_connections)} clients"
+                )
                 return True
 
             success, _ = await self.error_handler.handle_network_error(

@@ -36,10 +36,19 @@ from .memory import (
     ViewCache,
     WorldStateSnapshot,
 )
+from .priority_aging import AgingPolicy, PriorityAging
+from .quota import QuotaController, QuotaPolicy, TokenBucket
 from .scheduling import PriorityScheduler, WeightedRoundRobinScheduler
+from .temporal import (
+    DurationEffect,
+    TemporalAuthority,
+    TemporalAuthorityManager,
+    TemporalConfig,
+)
 from .timing import TimedQueue
 
 __all__ = [
+    "AgingPolicy",
     "BackpressureError",
     "BackpressureManager",
     "BackpressureQueue",
@@ -47,20 +56,28 @@ __all__ = [
     "CircuitBreakerOpenError",
     "DeferPolicy",
     "DropNewestPolicy",
+    "DurationEffect",
     "ErrorRecoveryPolicy",
     "IntentConflictError",
     "MemoryConfig",
     "MemoryManager",
     "MemoryStats",
+    "PriorityAging",
     "PriorityScheduler",
+    "QuotaController",
     "QuotaExceededError",
+    "QuotaPolicy",
     "RecoveryAction",
     "ShedOldestPolicy",
     "SimulationError",
     "SnapshotManager",
     "StaleContextError",
+    "TemporalAuthority",
+    "TemporalAuthorityManager",
+    "TemporalConfig",
     "TimedQueue",
     "TimeoutError",
+    "TokenBucket",
     "ValidationError",
     "ViewCache",
     "WeightedRoundRobinScheduler",

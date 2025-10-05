@@ -1,48 +1,48 @@
 <!doctype html>
-<html class="no-js" lang="ja" data-content_root="../">
+<html class="no-js" lang="en" data-content_root="../">
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="索引" href="../genindex.html"><link rel="search" title="検索" href="../search.html"><link rel="next" title="Orchestrator API" href="orchestrator.html"><link rel="prev" title="ドキュメントビルドと公開手順" href="../build-and-deploy.html">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Orchestrator API" href="orchestrator.html"><link rel="prev" title="Documentation Build and Deployment" href="../build-and-deploy.html">
         <link rel="canonical" href="https://ksterx.github.io/gunn/api/index.html">
 
     <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
-        <title>API リファレンス - gunn Documentation</title>
+        <title>API Reference - gunn Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
-
-
+    
+    
 
 
 <style>
   body {
     --color-code-background: #f2f2f2;
   --color-code-foreground: #1e1e1e;
-
+  
   }
   @media not print {
     body[data-theme="dark"] {
       --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-
+  
     }
     @media (prefers-color-scheme: dark) {
       body:not([data-theme="light"]) {
         --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-
+  
       }
     }
   }
 </style></head>
   <body>
-
+    
     <script>
       document.body.dataset.theme = localStorage.getItem("theme") || "auto";
     </script>
-
+    
 
 <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
   <symbol id="svg-toc" viewBox="0 0 24 24">
@@ -155,7 +155,7 @@
 
 <div class="announcement">
   <aside class="announcement-content">
-     GitHub Pages で公開する最新版ドキュメントです。
+     Latest documentation published on GitHub Pages. 
   </aside>
 </div>
 
@@ -185,18 +185,18 @@
   </header>
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
-
+      
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
-
+  
   <span class="sidebar-brand-text">gunn Documentation</span>
-
+  
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
-  <input class="sidebar-search" placeholder="検索" name="q" aria-label="検索">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">ガイド</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Guides</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../product.html">Product Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../structure.html">Project Structure</a></li>
@@ -204,8 +204,8 @@
 <li class="toctree-l1"><a class="reference internal" href="../integration-patterns.html">External Integration Patterns</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../web_adapter.html">Web Adapter</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../errors.html">Error Codes and Status Mappings</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../build-and-deploy.html">ドキュメントビルドと公開手順</a></li>
-<li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">API リファレンス</a><input aria-label="Toggle navigation of API リファレンス" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l1"><a class="reference internal" href="../build-and-deploy.html">Documentation Build and Deployment</a></li>
+<li class="toctree-l1 current has-children current-page"><a class="current reference internal" href="#">API Reference</a><input aria-label="Toggle navigation of API Reference" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="orchestrator.html">Orchestrator API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="facades.html">Facades API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="adapters.html">Adapters API</a></li>
@@ -234,7 +234,7 @@
 </div>
 
       </div>
-
+      
     </div>
   </aside>
   <div class="main">
@@ -266,20 +266,20 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="api">
-<h1>API リファレンス<a class="headerlink" href="#api" title="Link to this heading">¶</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">gunn</span></code> の公開 API を Sphinx の autodoc で自動生成するためのエントリポイントです。必要に応じてサブモジュールごとのページを追加してください。</p>
+          <section id="api-reference">
+<h1>API Reference<a class="headerlink" href="#api-reference" title="Link to this heading">¶</a></h1>
+<p>Entry point for automatically generating <code class="docutils literal notranslate"><span class="pre">gunn</span></code>’s public API documentation using Sphinx’s autodoc. Add pages for each submodule as needed.</p>
 <div class="toctree-wrapper compound">
 </div>
-<section id="id1">
-<h2>自動生成のワークフロー<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h2>
+<section id="auto-generation-workflow">
+<h2>Auto-generation Workflow<a class="headerlink" href="#auto-generation-workflow" title="Link to this heading">¶</a></h2>
 <ol class="arabic simple">
-<li><p>プロジェクトルートで <code class="docutils literal notranslate"><span class="pre">sphinx-apidoc</span> <span class="pre">-o</span> <span class="pre">docs/api</span> <span class="pre">src/gunn</span></code> を実行します。</p></li>
-<li><p>生成された <code class="docutils literal notranslate"><span class="pre">*.rst</span></code>/<code class="docutils literal notranslate"><span class="pre">*.md</span></code> を MyST 形式に整えて上記の toctree に追記します。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">html</span></code> を実行して、イントロページやサンプルコードが期待通りにレンダリングされるか確認してください。</p></li>
+<li><p>Run <code class="docutils literal notranslate"><span class="pre">sphinx-apidoc</span> <span class="pre">-o</span> <span class="pre">docs/api</span> <span class="pre">src/gunn</span></code> from the project root.</p></li>
+<li><p>Format the generated <code class="docutils literal notranslate"><span class="pre">*.rst</span></code>/<code class="docutils literal notranslate"><span class="pre">*.md</span></code> files into MyST format and add them to the toctree above.</p></li>
+<li><p>Run <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">html</span></code> to verify that intro pages and sample code render as expected.</p></li>
 </ol>
 <blockquote>
-<div><p><strong>Note</strong>: 自動生成を実施するまでは toctree のプレースホルダ（<code class="docutils literal notranslate"><span class="pre">orchestrator</span></code> など）は空のままでも構いません。不要であれば削除できます。</p>
+<div><p><strong>Note</strong>: Until auto-generation is performed, toctree placeholders (such as <code class="docutils literal notranslate"><span class="pre">orchestrator</span></code>) can remain empty and may be removed if unnecessary.</p>
 </div></blockquote>
 </section>
 </section>
@@ -287,7 +287,7 @@
         </article>
       </div>
       <footer>
-
+        
         <div class="related-pages">
           <a class="next-page" href="orchestrator.html">
               <div class="page-info">
@@ -304,9 +304,9 @@
                 <div class="context">
                   <span>Previous</span>
                 </div>
-
-                <div class="title">ドキュメントビルドと公開手順</div>
-
+                
+                <div class="title">Documentation Build and Deployment</div>
+                
               </div>
             </a>
         </div>
@@ -316,21 +316,21 @@
                 Copyright &#169; 2025, gunn contributors
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
-
+            
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on 2025-09-29</div>
+              Last updated on 2025-10-04</div>
           </div>
           <div class="right-details">
-
+            
           </div>
         </div>
-
+        
       </footer>
     </div>
     <aside class="toc-drawer">
-
-
+      
+      
       <div class="toc-sticky toc-scroll">
         <div class="toc-title-container">
           <span class="toc-title">
@@ -340,8 +340,8 @@
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">API リファレンス</a><ul>
-<li><a class="reference internal" href="#id1">自動生成のワークフロー</a></li>
+<li><a class="reference internal" href="#">API Reference</a><ul>
+<li><a class="reference internal" href="#auto-generation-workflow">Auto-generation Workflow</a></li>
 </ul>
 </li>
 </ul>
@@ -349,16 +349,15 @@
           </div>
         </div>
       </div>
-
-
+      
+      
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=2b5c797b"></script>
+</div><script src="../_static/documentation_options.js?v=38b66d78"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script src="../_static/translations.js?v=4755f45a"></script>
     </body>
 </html>

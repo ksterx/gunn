@@ -1,48 +1,48 @@
 <!doctype html>
-<html class="no-js" lang="ja" data-content_root="./">
+<html class="no-js" lang="en" data-content_root="./">
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="索引" href="genindex.html"><link rel="search" title="検索" href="search.html"><link rel="next" title="API リファレンス" href="api/index.html"><link rel="prev" title="Error Codes and Status Mappings" href="errors.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="API Reference" href="api/index.html"><link rel="prev" title="Error Codes and Status Mappings" href="errors.html">
         <link rel="canonical" href="https://ksterx.github.io/gunn/build-and-deploy.html">
 
     <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
-        <title>ドキュメントビルドと公開手順 - gunn Documentation</title>
+        <title>Documentation Build and Deployment - gunn Documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=580074bf" />
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-
-
+    
+    
 
 
 <style>
   body {
     --color-code-background: #f2f2f2;
   --color-code-foreground: #1e1e1e;
-
+  
   }
   @media not print {
     body[data-theme="dark"] {
       --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-
+  
     }
     @media (prefers-color-scheme: dark) {
       body:not([data-theme="light"]) {
         --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-
+  
       }
     }
   }
 </style></head>
   <body>
-
+    
     <script>
       document.body.dataset.theme = localStorage.getItem("theme") || "auto";
     </script>
-
+    
 
 <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
   <symbol id="svg-toc" viewBox="0 0 24 24">
@@ -155,7 +155,7 @@
 
 <div class="announcement">
   <aside class="announcement-content">
-     GitHub Pages で公開する最新版ドキュメントです。
+     Latest documentation published on GitHub Pages. 
   </aside>
 </div>
 
@@ -185,18 +185,18 @@
   </header>
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
-
+      
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
-
+  
   <span class="sidebar-brand-text">gunn Documentation</span>
-
+  
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
-  <input class="sidebar-search" placeholder="検索" name="q" aria-label="検索">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">ガイド</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Guides</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="product.html">Product Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="structure.html">Project Structure</a></li>
@@ -204,8 +204,8 @@
 <li class="toctree-l1"><a class="reference internal" href="integration-patterns.html">External Integration Patterns</a></li>
 <li class="toctree-l1"><a class="reference internal" href="web_adapter.html">Web Adapter</a></li>
 <li class="toctree-l1"><a class="reference internal" href="errors.html">Error Codes and Status Mappings</a></li>
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">ドキュメントビルドと公開手順</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API リファレンス</a><input aria-label="Toggle navigation of API リファレンス" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Documentation Build and Deployment</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="api/orchestrator.html">Orchestrator API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/facades.html">Facades API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/adapters.html">Adapters API</a></li>
@@ -234,7 +234,7 @@
 </div>
 
       </div>
-
+      
     </div>
   </aside>
   <div class="main">
@@ -266,52 +266,52 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="id1">
-<h1>ドキュメントビルドと公開手順<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h1>
-<section id="id2">
-<h2>依存関係の準備<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h2>
-<p>ドキュメント関連の依存を <code class="docutils literal notranslate"><span class="pre">docs</span></code> グループで管理しています。初回は次を実行してインストールしてください。</p>
+          <section id="documentation-build-and-deployment">
+<h1>Documentation Build and Deployment<a class="headerlink" href="#documentation-build-and-deployment" title="Link to this heading">¶</a></h1>
+<section id="preparing-dependencies">
+<h2>Preparing Dependencies<a class="headerlink" href="#preparing-dependencies" title="Link to this heading">¶</a></h2>
+<p>Documentation dependencies are managed in the <code class="docutils literal notranslate"><span class="pre">docs</span></code> group. For initial setup, run:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>docs
 </pre></div>
 </div>
 </section>
-<section id="id3">
-<h2>ローカルビルド<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h2>
-<p>HTML を生成するにはプロジェクトルートで以下を実行します。</p>
+<section id="local-build">
+<h2>Local Build<a class="headerlink" href="#local-build" title="Link to this heading">¶</a></h2>
+<p>To generate HTML documentation, run the following from the project root:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>uv<span class="w"> </span>run<span class="w"> </span>sphinx-build<span class="w"> </span>-b<span class="w"> </span>html<span class="w"> </span>docs<span class="w"> </span>docs/_build/html
 </pre></div>
 </div>
-<p>Makefile のショートカットも利用できます。</p>
+<p>You can also use the Makefile shortcut:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>docs
 make<span class="w"> </span>html
 </pre></div>
 </div>
-<p>ビルド結果は <code class="docutils literal notranslate"><span class="pre">docs/_build/html</span></code> に出力されるため、ブラウザで <code class="docutils literal notranslate"><span class="pre">index.html</span></code> を開いて確認できます。</p>
+<p>Build output is written to <code class="docutils literal notranslate"><span class="pre">docs/_build/html</span></code>, so you can open <code class="docutils literal notranslate"><span class="pre">index.html</span></code> in a browser to preview.</p>
 </section>
-<section id="id4">
-<h2>リンク検証<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h2>
-<p>外部リンクを検証するには <code class="docutils literal notranslate"><span class="pre">linkcheck</span></code> ビルダーを利用します。</p>
+<section id="link-validation">
+<h2>Link Validation<a class="headerlink" href="#link-validation" title="Link to this heading">¶</a></h2>
+<p>To validate external links, use the <code class="docutils literal notranslate"><span class="pre">linkcheck</span></code> builder:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>docs
 make<span class="w"> </span>linkcheck
 </pre></div>
 </div>
 </section>
-<section id="github-pages">
-<h2>GitHub Pages へのデプロイ<a class="headerlink" href="#github-pages" title="Link to this heading">¶</a></h2>
-<p>リポジトリには <code class="docutils literal notranslate"><span class="pre">Publish</span> <span class="pre">Docs</span></code> ワークフロー（<code class="docutils literal notranslate"><span class="pre">.github/workflows/docs-pages.yml</span></code>）を追加しています。<code class="docutils literal notranslate"><span class="pre">main</span></code> ブランチへの push ごとに Sphinx をビルドし、生成物を GitHub Pages（<code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> ブランチ）へ反映します。</p>
+<section id="deploying-to-github-pages">
+<h2>Deploying to GitHub Pages<a class="headerlink" href="#deploying-to-github-pages" title="Link to this heading">¶</a></h2>
+<p>The repository includes a <code class="docutils literal notranslate"><span class="pre">Publish</span> <span class="pre">Docs</span></code> workflow (<code class="docutils literal notranslate"><span class="pre">.github/workflows/docs-pages.yml</span></code>) that builds Sphinx documentation and deploys it to GitHub Pages (<code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> branch) on every push to <code class="docutils literal notranslate"><span class="pre">main</span></code>.</p>
 <ol class="arabic simple">
-<li><p>初回のみ GitHub の <strong>Settings → Pages</strong> でソースを「GitHub Actions」に変更してください。</p></li>
-<li><p>ワークフローでは <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span> <span class="pre">--group</span> <span class="pre">docs</span></code> → <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">sphinx-apidoc</span></code> → <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">sphinx-build</span> <span class="pre">-b</span> <span class="pre">html</span></code> を順に実行し、<code class="docutils literal notranslate"><span class="pre">docs/_build/html</span></code> をアーティファクト化して Pages にデプロイします。</p></li>
-<li><p>Pages には <code class="docutils literal notranslate"><span class="pre">.nojekyll</span></code> を自動生成してアップロードするため、静的アセット（<code class="docutils literal notranslate"><span class="pre">_static</span></code> など）も確実に配信されます。追加設定は不要です。</p></li>
+<li><p>On first setup, go to <strong>Settings → Pages</strong> in GitHub and change the source to “GitHub Actions”.</p></li>
+<li><p>The workflow runs <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">sync</span> <span class="pre">--group</span> <span class="pre">docs</span></code> → <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">sphinx-apidoc</span></code> → <code class="docutils literal notranslate"><span class="pre">uv</span> <span class="pre">run</span> <span class="pre">sphinx-build</span> <span class="pre">-b</span> <span class="pre">html</span></code> in sequence, then artifacts <code class="docutils literal notranslate"><span class="pre">docs/_build/html</span></code> and deploys to Pages.</p></li>
+<li><p>A <code class="docutils literal notranslate"><span class="pre">.nojekyll</span></code> file is automatically generated and uploaded, ensuring static assets (<code class="docutils literal notranslate"><span class="pre">_static</span></code>, etc.) are served correctly. No additional configuration is required.</p></li>
 </ol>
-<p>手動で公開フローを検証したい場合は、同じコマンド列をローカルで実行し、<code class="docutils literal notranslate"><span class="pre">docs/_build/html</span></code> の内容をそのまま配信対象にすれば GitHub Pages と一致します。</p>
+<p>To manually verify the publishing workflow, run the same command sequence locally and use <code class="docutils literal notranslate"><span class="pre">docs/_build/html</span></code> content as-is for deployment—it will match the GitHub Pages output.</p>
 </section>
-<section id="api">
-<h2>API リファレンスを更新する際のヒント<a class="headerlink" href="#api" title="Link to this heading">¶</a></h2>
+<section id="tips-for-updating-api-reference">
+<h2>Tips for Updating API Reference<a class="headerlink" href="#tips-for-updating-api-reference" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">sphinx-apidoc</span> <span class="pre">-o</span> <span class="pre">docs/api</span> <span class="pre">src/gunn</span></code> を利用すると自動でスタブを生成できます。</p></li>
-<li><p>生成済みファイルは必要に応じて MyST Markdown に書き換え、<code class="docutils literal notranslate"><span class="pre">api/index.md</span></code> の toctree に追加してください。</p></li>
-<li><p>新しいモジュールを公開する場合は docstring とタイプヒントを整備するとドキュメントが読みやすくなります。</p></li>
+<li><p>Use <code class="docutils literal notranslate"><span class="pre">sphinx-apidoc</span> <span class="pre">-o</span> <span class="pre">docs/api</span> <span class="pre">src/gunn</span></code> to auto-generate stubs.</p></li>
+<li><p>Convert generated files to MyST Markdown format as needed and add them to the toctree in <code class="docutils literal notranslate"><span class="pre">api/index.md</span></code>.</p></li>
+<li><p>When publishing new modules, ensure docstrings and type hints are complete to improve documentation readability.</p></li>
 </ul>
 </section>
 </section>
@@ -319,14 +319,14 @@ make<span class="w"> </span>linkcheck
         </article>
       </div>
       <footer>
-
+        
         <div class="related-pages">
           <a class="next-page" href="api/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">API リファレンス</div>
+                <div class="title">API Reference</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -336,9 +336,9 @@ make<span class="w"> </span>linkcheck
                 <div class="context">
                   <span>Previous</span>
                 </div>
-
+                
                 <div class="title">Error Codes and Status Mappings</div>
-
+                
               </div>
             </a>
         </div>
@@ -348,21 +348,21 @@ make<span class="w"> </span>linkcheck
                 Copyright &#169; 2025, gunn contributors
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
-
+            
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on 2025-09-29</div>
+              Last updated on 2025-10-04</div>
           </div>
           <div class="right-details">
-
+            
           </div>
         </div>
-
+        
       </footer>
     </div>
     <aside class="toc-drawer">
-
-
+      
+      
       <div class="toc-sticky toc-scroll">
         <div class="toc-title-container">
           <span class="toc-title">
@@ -372,12 +372,12 @@ make<span class="w"> </span>linkcheck
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">ドキュメントビルドと公開手順</a><ul>
-<li><a class="reference internal" href="#id2">依存関係の準備</a></li>
-<li><a class="reference internal" href="#id3">ローカルビルド</a></li>
-<li><a class="reference internal" href="#id4">リンク検証</a></li>
-<li><a class="reference internal" href="#github-pages">GitHub Pages へのデプロイ</a></li>
-<li><a class="reference internal" href="#api">API リファレンスを更新する際のヒント</a></li>
+<li><a class="reference internal" href="#">Documentation Build and Deployment</a><ul>
+<li><a class="reference internal" href="#preparing-dependencies">Preparing Dependencies</a></li>
+<li><a class="reference internal" href="#local-build">Local Build</a></li>
+<li><a class="reference internal" href="#link-validation">Link Validation</a></li>
+<li><a class="reference internal" href="#deploying-to-github-pages">Deploying to GitHub Pages</a></li>
+<li><a class="reference internal" href="#tips-for-updating-api-reference">Tips for Updating API Reference</a></li>
 </ul>
 </li>
 </ul>
@@ -385,16 +385,15 @@ make<span class="w"> </span>linkcheck
           </div>
         </div>
       </div>
-
-
+      
+      
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=2b5c797b"></script>
+</div><script src="_static/documentation_options.js?v=38b66d78"></script>
     <script src="_static/doctools.js?v=9bcbadda"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="_static/copybutton.js?v=f281be69"></script>
-    <script src="_static/translations.js?v=4755f45a"></script>
     </body>
 </html>

@@ -8,6 +8,8 @@ from .observation import (
     NoLatencyModel,
     ObservationPolicy,
     PolicyConfig,
+    SpatialObservationPolicy,
+    StalenessConfig,
     create_observation_policy,
 )
 
@@ -19,5 +21,7 @@ __all__ = [
     "NoLatencyModel",
     "ObservationPolicy",
     "PolicyConfig",
+    "SpatialObservationPolicy",
+    "StalenessConfig",
     "create_observation_policy",
 ]

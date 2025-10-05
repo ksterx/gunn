@@ -44,31 +44,34 @@ This system provides a deterministic, event-driven core with per-agent views (pa
 4. WHEN an ObservationPolicy includes relationship constraints THEN agents SHALL only observe entities they have relationships with
 5. IF an agent's view_seq is outdated THEN the system SHALL provide incremental updates via ObservationDelta patches
 
-### Requirement 3: Concurrent Agent Execution
+### Requirement 3: Asynchronous Agent Execution
 
-**User Story:** As a simulation runner, I want multiple agents to act simultaneously, so that the simulation feels natural and responsive.
-
-#### Acceptance Criteria
-
-1. WHEN multiple agents generate intents concurrently THEN the system SHALL process them without blocking each other
-2. WHEN agents submit intents THEN each SHALL receive a unique req_id for tracking
-3. WHEN the system processes intents THEN it SHALL use a two-phase commit (Intent → Effect) pattern with validation for staleness, validator rules, and quota
-4. WHEN intent conflicts occur THEN the system SHALL resolve them according to priority and fairness policies
-5. IF an agent's generation takes too long THEN the system SHALL enforce deadline_ms and token_budget limits
-
-### Requirement 4: Intelligent Interruption and Regeneration
-
-**User Story:** As a simulation designer, I want agents to intelligently interrupt and regenerate responses when new relevant information arrives, so that conversations feel natural and responsive.
+**User Story:** As a simulation runner, I want agents to act independently based on their own response timing rather than synchronously, so that each agent can observe and react to the world at their own pace.
 
 #### Acceptance Criteria
 
-1. WHEN an agent begins generating a response THEN the system SHALL issue a cancel_token with the current context_digest
-2. WHEN new events occur during generation THEN the system SHALL evaluate staleness using: latest_view_seq > context_seq + staleness_threshold (default: 0, configurable per agent policy)
-3. WHEN context becomes stale THEN the system SHALL cancel the current generation and trigger regeneration
-4. WHEN cancellation occurs THEN the system SHALL provide the reason (stale_due_to) to the agent
-5. IF interrupt_on_new_info policy is "always" THEN any new information SHALL trigger interruption
-6. IF interrupt_on_new_info policy is "only_conflict" THEN only conflicting information SHALL trigger interruption
-7. WHEN debounce_ms is configured THEN the system SHALL suppress rapid successive interruptions within the time window
+1. WHEN an agent receives an OpenAI response THEN it SHALL immediately observe the current world state and generate its next intent
+2. WHEN multiple agents generate intents at different times THEN the system SHALL process them without waiting for other agents
+3. WHEN agents submit intents THEN each SHALL receive a unique req_id for tracking and continue processing independently
+4. WHEN the system processes intents THEN it SHALL use a two-phase commit (Intent → Effect) pattern with validation for staleness, validator rules, and quota
+5. WHEN intent conflicts occur THEN the system SHALL resolve them according to priority and fairness policies
+6. WHEN an agent completes an action THEN it SHALL immediately re-observe the world state for changes from other agents
+7. IF an agent's generation takes too long THEN the system SHALL enforce deadline_ms and token_budget limits
+
+### Requirement 4: Continuous Observation and Reactive Behavior
+
+**User Story:** As a simulation designer, I want agents to continuously observe their environment and react to changes from other agents, so that they can engage in natural conversations and collaborative behavior.
+
+#### Acceptance Criteria
+
+1. WHEN an agent completes any action THEN it SHALL immediately request a new observation of the world state
+2. WHEN an agent receives an observation THEN it SHALL evaluate whether to generate a new intent based on changes
+3. WHEN other agents perform actions (speak, move, interact) THEN observing agents SHALL see these changes in their next observation
+4. WHEN agents engage in conversation THEN they SHALL observe each other's messages and respond appropriately
+5. WHEN agents are in proximity THEN they SHALL observe each other's positions and movements
+6. WHEN collaborative opportunities arise THEN agents SHALL be able to observe and coordinate with each other
+7. IF an agent's generation takes too long THEN the system SHALL enforce deadline_ms and token_budget limits
+8. WHEN context becomes stale during generation THEN the system SHALL cancel and trigger regeneration with updated context
 
 ### Requirement 5: Dual API Facades
 
@@ -178,7 +181,23 @@ This system provides a deterministic, event-driven core with per-agent views (pa
 4. WHEN version mismatches occur THEN the system SHALL provide clear error messages and migration guidance
 5. IF deprecated features are used THEN the system SHALL log deprecation warnings with migration timelines
 
-### Requirement 14: Observability
+### Requirement 14: Asynchronous Agent Loop Pattern
+
+**User Story:** As an agent developer, I want agents to follow an asynchronous observe-think-act loop, so that they can respond to the environment at their own pace without waiting for other agents.
+
+#### Acceptance Criteria
+
+1. WHEN an agent starts THEN it SHALL enter an observe-think-act loop that continues until explicitly stopped
+2. WHEN an agent observes THEN it SHALL receive information about other agents' locations, recent actions, and messages
+3. WHEN an agent thinks THEN it SHALL use OpenAI or similar LLM to generate its next action based on current observations
+4. WHEN an agent acts THEN it SHALL submit its intent (move, speak, interact) and immediately return to observing
+5. WHEN multiple agents are active THEN each SHALL operate independently without synchronization barriers
+6. WHEN an agent speaks THEN other agents SHALL observe the message content and speaker identity
+7. WHEN agents are near each other THEN they SHALL observe each other's presence and can engage in conversation
+8. IF an agent receives no new information THEN it MAY choose to wait or perform a default action
+9. WHEN collaborative behavior is desired THEN agents SHALL coordinate through observed actions and communication
+
+### Requirement 15: Observability
 
 **User Story:** As a system operator, I want comprehensive observability, so that I can monitor, debug, and optimize the system.
 

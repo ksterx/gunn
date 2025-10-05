@@ -2,9 +2,9 @@
 
 ## Overview
 
-The multi-agent simulation core implements an event-driven architecture with partial observation, concurrent execution, and intelligent interruption/regeneration. The system is built around a central event log with deterministic ordering, supporting both RL-style and message-oriented interaction patterns through unified facades.
+The multi-agent simulation core implements an event-driven architecture with partial observation, asynchronous agent execution, and continuous observation loops. The system is built around a central event log with deterministic ordering, supporting independent agent operation where each agent follows its own observe-think-act cycle without synchronization barriers.
 
-The core design principle is **separation of concerns**: a lightweight event-driven core handles state consistency and ordering, while pluggable policies handle observation filtering, validation, and scheduling decisions.
+The core design principle is **asynchronous independence**: agents operate at their own pace, observing the world state after each action and generating new intents based on their individual LLM response timing. This enables natural conversation flows and collaborative behavior where agents can interrupt, respond, and coordinate organically.
 
 ## Architecture
 
@@ -67,6 +67,45 @@ graph TB
     O --> AH2
     O --> AHN
 ```
+
+### Asynchronous Agent Loop Architecture
+
+The system supports an asynchronous agent execution model where each agent operates independently:
+
+```mermaid
+graph TD
+    A[Agent Start] --> B[Observe World State]
+    B --> C[Process Observations with LLM]
+    C --> D[Generate Intent]
+    D --> E[Submit Intent to Orchestrator]
+    E --> F[Wait for Action Completion]
+    F --> B
+    
+    subgraph "Other Agents"
+        G[Agent 2 Loop]
+        H[Agent 3 Loop]
+        I[Agent N Loop]
+    end
+    
+    subgraph "Shared World State"
+        J[Event Log]
+        K[World State]
+        L[Observation Policies]
+    end
+    
+    E --> J
+    B --> K
+    G --> J
+    H --> J
+    I --> J
+```
+
+**Key Characteristics:**
+- **Independent Timing**: Each agent operates at its own pace based on LLM response time
+- **Continuous Observation**: Agents re-observe after every action to see changes from other agents
+- **Natural Conversation**: Agents can interrupt, respond, and build on each other's messages
+- **Collaborative Behavior**: Agents coordinate through observed actions and communication
+- **No Synchronization Barriers**: No waiting for other agents to complete their turns
 
 ### Core Components
 
@@ -132,6 +171,8 @@ class ObservationDelta(TypedDict):
     patches: List[Dict]  # RFC6902 JSON Patch operations with stable paths
     context_digest: str
     schema_version: str
+    delivery_id: str     # For idempotent delivery and deduplication
+    redelivery: bool     # Flag indicating this is a redelivery attempt
 
 class Intent(TypedDict):
     kind: Literal["Speak", "Move", "Interact", "Custom"]
@@ -168,6 +209,9 @@ class Effect(TypedDict):
     sim_time: float
     source_id: str
     schema_version: str    # Semantic versioning (e.g., "1.0.0")
+    req_id: str | None     # Request ID for tracking action completion
+    duration_ms: float | None  # Optional duration for interval effects
+    apply_at: float | None     # Optional delayed application timestamp
 
 class CancelToken:
     def __init__(self, req_id: str, agent_id: str):
@@ -244,6 +288,12 @@ class Orchestrator:
 
     async def cancel_if_stale(self, agent_id: str, req_id: str, new_view_seq: int) -> bool:
         """Check staleness and cancel if needed"""
+
+    async def ack_observation(self, agent_id: str, delivery_id: str) -> None:
+        """Acknowledge receipt of observation to prevent redelivery"""
+
+    async def wait_effect_applied(self, req_id: str, timeout: float | None = None) -> Effect:
+        """Wait for EffectApplied confirmation for the given req_id"""
 ```
 
 ### Agent Handle Interface
@@ -254,6 +304,7 @@ class AgentHandle:
         self.agent_id = agent_id
         self.orchestrator = orchestrator
         self.view_seq: int = 0  # Renamed to avoid shadowing
+        self._running: bool = False
 
     async def next_observation(self) -> ObservationDelta:
         """Get next observation delta from orchestrator's timed queue"""
@@ -261,6 +312,11 @@ class AgentHandle:
         delta = await timed_queue.get()
         self.view_seq = delta["view_seq"]
         return delta
+
+    async def get_current_observation(self) -> View:
+        """Get current world state view for this agent"""
+        policy = self.orchestrator.observation_policies[self.agent_id]
+        return policy.filter_world_state(self.orchestrator.world_state, self.agent_id)
 
     async def submit_intent(self, intent: Intent) -> str:
         """Submit intent for validation and processing"""
@@ -275,6 +331,115 @@ class AgentHandle:
     def get_view_seq(self) -> int:
         """Get current view sequence number"""
         return self.view_seq
+
+    async def run_async_loop(self, agent_logic: 'AsyncAgentLogic') -> None:
+        """Run the asynchronous observe-think-act loop for this agent"""
+        self._running = True
+        try:
+            while self._running:
+                # Observe current world state
+                observation = await self.get_current_observation()
+                
+                # Let agent logic process observation and generate intent
+                intent = await agent_logic.process_observation(observation, self.agent_id)
+                
+                if intent:
+                    # Submit intent and wait for completion
+                    req_id = await self.submit_intent(intent)
+                    
+                    # Wait for the action to be processed
+                    await self._wait_for_action_completion(req_id)
+                
+                # Small delay to prevent busy waiting
+                await asyncio.sleep(0.1)
+        except Exception as e:
+            # Log error and stop loop
+            self._running = False
+            raise
+
+    def stop_async_loop(self) -> None:
+        """Stop the asynchronous agent loop"""
+        self._running = False
+
+    async def ack_observation(self, delivery_id: str) -> None:
+        """Acknowledge receipt of observation to prevent redelivery"""
+        await self.orchestrator.ack_observation(self.agent_id, delivery_id)
+
+    async def _wait_for_action_completion(self, req_id: str) -> None:
+        """Wait for the submitted action to be processed and reflected in world state"""
+        try:
+            await self.orchestrator.wait_effect_applied(req_id, timeout=30.0)
+        except asyncio.TimeoutError:
+            # Log timeout but continue - agent can still observe and react
+            pass
+```
+
+### Asynchronous Agent Logic Interface
+
+```python
+from abc import ABC, abstractmethod
+
+class AsyncAgentLogic(ABC):
+    """Abstract base class for implementing asynchronous agent behavior"""
+    
+    @abstractmethod
+    async def process_observation(self, observation: View, agent_id: str) -> Intent | None:
+        """Process current observation and return intent to execute, or None to wait"""
+        pass
+
+class ConversationalAgent(AsyncAgentLogic):
+    """Example implementation for conversational agents"""
+    
+    def __init__(self, llm_client, personality: str = "helpful"):
+        self.llm_client = llm_client
+        self.personality = personality
+        self.conversation_history: List[str] = []
+    
+    async def process_observation(self, observation: View, agent_id: str) -> Intent | None:
+        # Extract relevant information from observation
+        nearby_agents = self._get_nearby_agents(observation)
+        recent_messages = self._get_recent_messages(observation)
+        
+        # Build context for LLM
+        context = self._build_context(nearby_agents, recent_messages, agent_id)
+        
+        # Generate response using LLM
+        response = await self.llm_client.generate_response(context, self.personality)
+        
+        if response.action_type == "speak":
+            return Intent(
+                kind="Speak",
+                payload={"text": response.text, "agent_id": agent_id},
+                context_seq=observation.view_seq,
+                req_id=str(uuid.uuid4()),
+                agent_id=agent_id,
+                priority=0,
+                schema_version="1.0.0"
+            )
+        elif response.action_type == "move":
+            return Intent(
+                kind="Move", 
+                payload={"to": response.target_position, "agent_id": agent_id},
+                context_seq=observation.view_seq,
+                req_id=str(uuid.uuid4()),
+                agent_id=agent_id,
+                priority=0,
+                schema_version="1.0.0"
+            )
+        
+        return None  # No action needed
+    
+    def _get_nearby_agents(self, observation: View) -> List[Dict]:
+        """Extract information about nearby agents from observation"""
+        pass
+    
+    def _get_recent_messages(self, observation: View) -> List[Dict]:
+        """Extract recent messages from observation"""
+        pass
+    
+    def _build_context(self, nearby_agents: List, recent_messages: List, agent_id: str) -> str:
+        """Build context string for LLM"""
+        pass
 ```
 
 ### Observation Policy Interface
@@ -295,6 +460,12 @@ class ObservationPolicy:
 
     def calculate_observation_delta(self, old_view: View, new_view: View) -> ObservationDelta:
         """Generate RFC6902 JSON Patch between views"""
+
+    def is_intent_stale(self, intent: Intent, since_seq: int, world_state: WorldState) -> bool:
+        """Check if changes since since_seq make the intent's preconditions invalid"""
+        # Default implementation: any change triggers staleness
+        # Subclasses should override for intent-specific logic
+        return True
 ```
 
 ## Data Models
@@ -693,6 +864,282 @@ The system maintains these critical invariants:
 5. **Log Integrity**: `EventLog.validate_integrity()` verifies complete hash chain
 6. **UUID Uniqueness**: Each `Effect.uuid` is globally unique (using `uuid4().hex`)
 
+### Observation Delivery System
+
+```python
+class DeliveryTracker:
+    """Tracks observation delivery and handles redelivery for reliability"""
+    def __init__(self):
+        self._pending_deliveries: Dict[tuple, ObservationDelta] = {}  # (agent_id, delivery_id)
+        self._delivery_timeouts: Dict[tuple, float] = {}  # (agent_id, delivery_id) -> timeout
+        self._redelivery_config = RedeliveryConfig(
+            initial_timeout=5.0,
+            max_retries=3,
+            backoff_multiplier=2.0
+        )
+
+    async def schedule_delivery(self, agent_id: str, delta: ObservationDelta) -> None:
+        """Schedule observation delivery with timeout tracking"""
+        delivery_id = delta["delivery_id"]
+        key = (agent_id, delivery_id)
+        
+        self._pending_deliveries[key] = delta
+        self._delivery_timeouts[key] = time.time() + self._redelivery_config.initial_timeout
+        
+        # Schedule to agent's timed queue
+        await self._deliver_to_agent(agent_id, delta)
+
+    async def acknowledge_delivery(self, agent_id: str, delivery_id: str) -> bool:
+        """Mark delivery as acknowledged and remove from pending"""
+        key = (agent_id, delivery_id)
+        if key in self._pending_deliveries:
+            del self._pending_deliveries[key]
+            del self._delivery_timeouts[key]
+            return True
+        return False
+
+    async def check_redeliveries(self) -> None:
+        """Check for timed-out deliveries and schedule redelivery"""
+        now = time.time()
+        for key, timeout in list(self._delivery_timeouts.items()):
+            if now > timeout:
+                agent_id, delivery_id = key
+                delta = self._pending_deliveries[key]
+                
+                # Mark as redelivery and reschedule
+                delta["redelivery"] = True
+                await self._deliver_to_agent(agent_id, delta)
+                
+                # Update timeout with backoff
+                self._delivery_timeouts[key] = now + (
+                    self._redelivery_config.initial_timeout * 
+                    self._redelivery_config.backoff_multiplier
+                )
+
+class QuotaController:
+    """Token bucket implementation for fair resource allocation"""
+    def __init__(self, config: QuotaConfig):
+        self._buckets: Dict[str, TokenBucket] = {}
+        self._config = config
+
+    def allow(self, agent_id: str, cost: int = 1) -> bool:
+        """Check if agent can perform action based on quota"""
+        if agent_id not in self._buckets:
+            self._buckets[agent_id] = TokenBucket(
+                capacity=self._config.bucket_capacity,
+                refill_rate=self._config.refill_rate
+            )
+        
+        return self._buckets[agent_id].consume(cost)
+
+    def get_quota_status(self, agent_id: str) -> QuotaStatus:
+        """Get current quota status for agent"""
+        if agent_id not in self._buckets:
+            return QuotaStatus(available=self._config.bucket_capacity, capacity=self._config.bucket_capacity)
+        
+        bucket = self._buckets[agent_id]
+        return QuotaStatus(available=bucket.available, capacity=bucket.capacity)
+
+class TokenBucket:
+    """Token bucket for rate limiting with refill"""
+    def __init__(self, capacity: int, refill_rate: float):
+        self.capacity = capacity
+        self.available = capacity
+        self.refill_rate = refill_rate  # tokens per second
+        self.last_refill = time.time()
+
+    def consume(self, tokens: int) -> bool:
+        """Try to consume tokens, return True if successful"""
+        self._refill()
+        if self.available >= tokens:
+            self.available -= tokens
+            return True
+        return False
+
+    def _refill(self) -> None:
+        """Refill tokens based on elapsed time"""
+        now = time.time()
+        elapsed = now - self.last_refill
+        tokens_to_add = int(elapsed * self.refill_rate)
+        
+        if tokens_to_add > 0:
+            self.available = min(self.capacity, self.available + tokens_to_add)
+            self.last_refill = now
+
+class PriorityAging:
+    """Implements priority aging to prevent starvation"""
+    def __init__(self, aging_rate: float = 0.1):
+        self.aging_rate = aging_rate  # priority increase per second
+        self._submission_times: Dict[str, float] = {}  # req_id -> submission_time
+
+    def calculate_effective_priority(self, req_id: str, base_priority: int) -> float:
+        """Calculate priority with aging based on wait time"""
+        if req_id not in self._submission_times:
+            self._submission_times[req_id] = time.time()
+            return float(base_priority)
+        
+        wait_time = time.time() - self._submission_times[req_id]
+        aging_bonus = wait_time * self.aging_rate
+        return float(base_priority) + aging_bonus
+
+    def remove_request(self, req_id: str) -> None:
+        """Remove request from aging tracking"""
+        self._submission_times.pop(req_id, None)
+```
+
+### Action Completion Tracking
+
+```python
+class ActionCompletionTracker:
+    """Tracks action completion and provides confirmation to agents"""
+    def __init__(self):
+        self._pending_actions: Dict[str, asyncio.Future] = {}  # req_id -> Future[Effect]
+        self._completion_timeout = 30.0
+
+    def register_action(self, req_id: str) -> asyncio.Future[Effect]:
+        """Register an action and return future for completion"""
+        future = asyncio.Future()
+        self._pending_actions[req_id] = future
+        
+        # Set timeout
+        asyncio.create_task(self._timeout_action(req_id, future))
+        return future
+
+    async def complete_action(self, req_id: str, result: Effect) -> None:
+        """Mark action as completed with result"""
+        if req_id in self._pending_actions:
+            future = self._pending_actions.pop(req_id)
+            if not future.done():
+                future.set_result(result)
+
+    async def fail_action(self, req_id: str, error: Exception) -> None:
+        """Mark action as failed with error"""
+        if req_id in self._pending_actions:
+            future = self._pending_actions.pop(req_id)
+            if not future.done():
+                future.set_exception(error)
+
+    async def _timeout_action(self, req_id: str, future: asyncio.Future) -> None:
+        """Timeout an action if it takes too long"""
+        await asyncio.sleep(self._completion_timeout)
+        if not future.done():
+            future.set_exception(asyncio.TimeoutError(f"Action {req_id} timed out"))
+            self._pending_actions.pop(req_id, None)
+```
+
+### Intelligent Staleness Detection
+
+```python
+class SpatialObservationPolicy(ObservationPolicy):
+    """Observation policy with spatial-aware staleness detection"""
+    
+    def is_intent_stale(self, intent: Intent, since_seq: int, world_state: WorldState) -> bool:
+        """Check staleness based on intent type and spatial relevance"""
+        if intent["kind"] == "Move":
+            return self._is_move_intent_stale(intent, since_seq, world_state)
+        elif intent["kind"] == "Speak":
+            return self._is_speak_intent_stale(intent, since_seq, world_state)
+        else:
+            # Default: any change triggers staleness
+            return True
+
+    def _is_move_intent_stale(self, intent: Intent, since_seq: int, world_state: WorldState) -> bool:
+        """Check if move intent is stale based on spatial changes"""
+        target_pos = intent["payload"].get("to")
+        if not target_pos:
+            return True
+        
+        # Check if target area has been occupied or blocked
+        # Check if navigation mesh has changed
+        # Check if agent's current position has changed significantly
+        
+        agent_id = intent["agent_id"]
+        current_pos = world_state.spatial_index.get(agent_id)
+        
+        # Simple implementation: check if any entity moved near target
+        for entity_id, pos in world_state.spatial_index.items():
+            if entity_id != agent_id:
+                distance_to_target = self._calculate_distance(pos, target_pos)
+                if distance_to_target < 2.0:  # Within 2 units of target
+                    return True
+        
+        return False
+
+    def _is_speak_intent_stale(self, intent: Intent, since_seq: int, world_state: WorldState) -> bool:
+        """Check if speak intent is stale based on conversation changes"""
+        # Check if conversation context has changed
+        # Check if target participants have moved away
+        # Check if new messages have been posted to the same conversation
+        
+        agent_id = intent["agent_id"]
+        agent_pos = world_state.spatial_index.get(agent_id)
+        
+        if not agent_pos:
+            return True
+        
+        # Check if nearby agents have changed (conversation participants)
+        nearby_agents = []
+        for entity_id, pos in world_state.spatial_index.items():
+            if entity_id != agent_id:
+                distance = self._calculate_distance(agent_pos, pos)
+                if distance < 5.0:  # Within conversation range
+                    nearby_agents.append(entity_id)
+        
+        # Simple heuristic: if nearby agents changed, conversation context may be stale
+        # More sophisticated implementation would track conversation threads
+        return len(nearby_agents) != intent["payload"].get("expected_participants", 0)
+
+    def _calculate_distance(self, pos1: tuple, pos2: tuple) -> float:
+        """Calculate Euclidean distance between two positions"""
+        if len(pos1) >= 2 and len(pos2) >= 2:
+            return ((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2) ** 0.5
+        return float('inf')
+```
+
+### Replay Invariance Testing
+
+```python
+class ReplayInvarianceValidator:
+    """Validates that incremental updates match full replay results"""
+    
+    def __init__(self, orchestrator: Orchestrator):
+        self.orchestrator = orchestrator
+
+    async def assert_replay_equivalence(self, event_log: EventLog, world_state: WorldState) -> None:
+        """Verify current world state matches full replay from event log"""
+        # Create fresh orchestrator for replay
+        replay_orchestrator = Orchestrator(self.orchestrator.config)
+        
+        # Replay all events
+        entries = event_log.get_entries_since(0)
+        for entry in entries:
+            await replay_orchestrator._apply_effect_to_world_state(entry.effect)
+        
+        # Compare world states
+        if not self._world_states_equal(world_state, replay_orchestrator.world_state):
+            raise ReplayInvarianceError(
+                "World state mismatch between incremental and replay",
+                current=world_state,
+                replayed=replay_orchestrator.world_state
+            )
+
+    def _world_states_equal(self, state1: WorldState, state2: WorldState) -> bool:
+        """Deep comparison of world states"""
+        return (
+            state1.entities == state2.entities and
+            state1.relationships == state2.relationships and
+            state1.spatial_index == state2.spatial_index and
+            state1.metadata == state2.metadata
+        )
+
+class ReplayInvarianceError(Exception):
+    """Raised when replay invariance is violated"""
+    def __init__(self, message: str, current: WorldState, replayed: WorldState):
+        super().__init__(message)
+        self.current = current
+        self.replayed = replayed
+```
+
 ### Memory Management
 
 ```python
@@ -712,4 +1159,4 @@ class MemoryManager:
         """Return current memory usage statistics"""
 ```
 
-This design provides a solid foundation for implementing the multi-agent simulation core with all the required features: partial observation, concurrent execution, intelligent interruption, dual facades, and robust error handling. The architecture is modular, testable, and scalable.
+This design provides a comprehensive foundation for implementing the multi-agent simulation core with all the critical specifications: reliable observation delivery, action completion confirmation, intelligent staleness detection, fair resource allocation, temporal authority handling, and replay invariance validation. The architecture supports truly asynchronous agent behavior while maintaining system consistency and reliability.eatures: partial observation, concurrent execution, intelligent interruption, dual facades, and robust error handling. The architecture is modular, testable, and scalable.

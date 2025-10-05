@@ -8,6 +8,7 @@ from collections import defaultdict, deque
 from typing import Any, Protocol
 
 from gunn.schemas.types import Intent
+from gunn.utils.priority_aging import AgingPolicy, PriorityAging
 from gunn.utils.telemetry import get_logger
 
 
@@ -52,15 +53,18 @@ class IntentScheduler(Protocol):
 
 
 class WeightedRoundRobinScheduler:
-    """Weighted Round Robin scheduler for fair intent processing.
+    """Weighted Round Robin scheduler with priority aging for fair intent processing.
 
     Provides fair scheduling across agents with configurable weights
     and priority levels. Ensures no agent can monopolize processing
-    while respecting priority and fairness constraints.
+    while respecting priority and fairness constraints. Integrates
+    priority aging to prevent starvation of low-priority intents.
 
     Requirements addressed:
     - 3.4: Priority and fairness policies
     - 9: Fairness (Weighted Round Robin) in intent validation pipeline
+    - 18.2: PriorityAging system to prevent starvation
+    - 18.3: Weighted round-robin with aging-adjusted priorities
     """
 
     def __init__(
@@ -68,6 +72,7 @@ class WeightedRoundRobinScheduler:
         default_weight: int = 1,
         max_queue_depth: int = 100,
         priority_levels: int = 3,
+        aging_policy: AgingPolicy | None = None,
     ):
         """Initialize weighted round robin scheduler.
 
@@ -75,6 +80,7 @@ class WeightedRoundRobinScheduler:
             default_weight: Default weight for agents
             max_queue_depth: Maximum queue depth per agent
             priority_levels: Number of priority levels (0 = highest)
+            aging_policy: Priority aging policy configuration
         """
         self.default_weight = default_weight
         self.max_queue_depth = max_queue_depth
@@ -91,6 +97,9 @@ class WeightedRoundRobinScheduler:
         self._current_weights: dict[str, int] = {}  # Current remaining weight
         self._agent_order: list[str] = []  # Round-robin order
         self._current_agent_index: int = 0
+
+        # Priority aging
+        self._priority_aging = PriorityAging(aging_policy)
 
         # Statistics
         self._total_enqueued: int = 0
@@ -133,7 +142,7 @@ class WeightedRoundRobinScheduler:
         )
 
     def enqueue(self, intent: Intent, priority: int = 0) -> None:
-        """Enqueue an intent for processing.
+        """Enqueue an intent for processing with priority aging tracking.
 
         Args:
             intent: Intent to enqueue
@@ -165,6 +174,9 @@ class WeightedRoundRobinScheduler:
         # Initialize agent if new
         if agent_id not in self._weights:
             self.set_agent_weight(agent_id, self.default_weight)
+
+        # Track for priority aging
+        self._priority_aging.track_intent(intent, priority)
 
         # Enqueue intent
         self._queues[agent_id][priority].append(intent)
@@ -231,7 +243,16 @@ class WeightedRoundRobinScheduler:
         return None
 
     def _dequeue_from_agent(self, agent_id: str) -> Intent | None:
-        """Dequeue highest priority intent from specific agent.
+        """Dequeue highest aged priority intent from specific agent.
+
+        Uses priority aging to determine effective priority, preventing
+        starvation of lower-priority intents. Checks all intents across
+        all priority queues to find the one with highest aged priority.
+
+        Priority comparison:
+        1. Aged priority (higher is better)
+        2. Queue priority (lower number = higher priority)
+        3. FIFO within same aged priority
 
         Args:
             agent_id: Agent to dequeue from
@@ -241,10 +262,46 @@ class WeightedRoundRobinScheduler:
         """
         agent_queues = self._queues[agent_id]
 
-        # Check priorities from highest (0) to lowest
-        for priority in range(self.priority_levels):
-            if agent_queues.get(priority):
-                return agent_queues[priority].popleft()
+        # Find intent with highest aged priority across all queues
+        best_intent: Intent | None = None
+        best_aged_priority: int = -1
+        best_queue_priority: int = self.priority_levels  # Start with lowest priority
+        best_queue_index: int = -1
+
+        for queue_priority in range(self.priority_levels):
+            queue = agent_queues.get(queue_priority)
+            if not queue:
+                continue
+
+            # Check all intents in this queue to find highest aged priority
+            for idx, intent in enumerate(queue):
+                aged_priority = self._priority_aging.get_aged_priority(intent["req_id"])
+
+                # Compare: aged priority first, then queue priority (lower is better)
+                is_better = False
+                if aged_priority > best_aged_priority:
+                    is_better = True
+                elif aged_priority == best_aged_priority:
+                    # Same aged priority - use queue priority (lower is better)
+                    if queue_priority < best_queue_priority:
+                        is_better = True
+                    elif queue_priority == best_queue_priority and best_intent is None:
+                        # Same queue, first one wins (FIFO)
+                        is_better = True
+
+                if is_better:
+                    best_intent = intent
+                    best_aged_priority = aged_priority
+                    best_queue_priority = queue_priority
+                    best_queue_index = idx
+
+        # Dequeue the best intent
+        if best_intent:
+            # Remove from queue at specific index
+            queue = agent_queues[best_queue_priority]
+            queue.remove(best_intent)
+            self._priority_aging.untrack_intent(best_intent["req_id"])
+            return best_intent
 
         return None
 
@@ -254,7 +311,7 @@ class WeightedRoundRobinScheduler:
             weight = self._weights.get(agent_id, self.default_weight)
             self._current_weights[agent_id] = weight
 
-        self._logger.debug("Agent weights reset for new round")
+        # self._logger.debug("Agent weights reset for new round")
 
     def get_queue_depth(self, agent_id: str | None = None) -> int:
         """Get queue depth for specific agent or total.
@@ -299,7 +356,7 @@ class WeightedRoundRobinScheduler:
         }
 
     def get_stats(self) -> dict[str, Any]:
-        """Get scheduler statistics.
+        """Get scheduler statistics including aging information.
 
         Returns:
             Dictionary with comprehensive scheduler statistics
@@ -319,6 +376,7 @@ class WeightedRoundRobinScheduler:
             "agent_stats": dict(self._agent_stats),
             "max_queue_depth": self.max_queue_depth,
             "priority_levels": self.priority_levels,
+            "priority_aging": self._priority_aging.get_stats(),
         }
 
     def remove_agent(self, agent_id: str) -> int:
@@ -372,6 +430,7 @@ class WeightedRoundRobinScheduler:
         self._current_weights.clear()
         self._agent_order.clear()
         self._current_agent_index = 0
+        self._priority_aging.clear()
 
         self._logger.info(
             "Scheduler cleared",

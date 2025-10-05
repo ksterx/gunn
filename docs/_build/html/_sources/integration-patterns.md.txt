@@ -281,7 +281,7 @@ import openai
 from gunn.schemas.types import CancelToken, Intent, Effect
 
 class LLMAdapter:
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str = "gpt-4.1-mini"):
         self.client = openai.AsyncOpenAI(api_key=api_key)
         self.model = model
 

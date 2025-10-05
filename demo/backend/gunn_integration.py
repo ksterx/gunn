@@ -462,9 +462,8 @@ class BattleOrchestrator:
         self.effect_processor = EffectProcessor(action_callback=None)
         self.game_status_manager = GameStatusManager()
 
-        # Concurrent processing state
-        self._processing_lock = asyncio.Lock()
-        self._current_tick = 0
+        # Async agent tasks (independent agent loops)
+        self._agent_tasks: list[asyncio.Task] = []
 
         # Logging
         self._logger = get_logger("battle_orchestrator")
@@ -501,12 +500,23 @@ class BattleOrchestrator:
         self._logger.info("Resetting battle orchestrator")
         self._initialized = False
 
+        # Cancel all agent tasks
+        for task in self._agent_tasks:
+            if not task.done():
+                task.cancel()
+
+        # Wait for all tasks to complete
+        if self._agent_tasks:
+            await asyncio.gather(*self._agent_tasks, return_exceptions=True)
+
+        self._agent_tasks.clear()
+
         # Clear agent registry in the underlying orchestrator
         # This allows agents to be re-registered without conflicts
         if hasattr(self.orchestrator, "_agents"):
             self.orchestrator._agents.clear()
 
-        self._current_tick = 0
+        self._logger.info("Battle orchestrator reset complete")
 
     def set_action_callback(self, callback) -> None:
         """Set the callback for action result notifications.
@@ -565,20 +575,60 @@ class BattleOrchestrator:
         await self._sync_world_state()
 
     async def _register_agents_with_gunn(self) -> None:
-        """Register all agents in world state with Gunn orchestrator."""
-        self._logger.info("Registering agents with Gunn orchestrator")
+        """Register all agents in world state with Gunn orchestrator using async agent loops."""
+        self._logger.info("Registering agents with Gunn orchestrator (async mode)")
+
+        from .battle_agent import BattleAgent
+
+        self._agent_tasks = []
 
         for agent_id, agent in self.world_state.agents.items():
+            # Create observation policy for this agent
             policy = BattleObservationPolicy(agent.team, agent.vision_range)
-            await self.orchestrator.register_agent(agent_id, policy)
-            self._logger.debug(f"Registered agent {agent_id} with team {agent.team}")
+
+            # Register agent with orchestrator
+            handle = await self.orchestrator.register_agent(agent_id, policy)
+
+            # Create BattleAgent instance
+            battle_agent = BattleAgent(
+                agent_id=agent_id,
+                ai_decision_maker=self.ai_decision_maker,
+                world_state=self.world_state,
+            )
+
+            # Start async agent loop for independent execution
+            agent_task = asyncio.create_task(
+                handle.run_async_loop(battle_agent), name=f"battle_agent_{agent_id}"
+            )
+            self._agent_tasks.append(agent_task)
+
+            self._logger.debug(
+                f"Registered agent {agent_id} with team {agent.team} (async loop started)"
+            )
 
     async def _sync_world_state(self) -> None:
-        """Synchronize our world state with Gunn's world state."""
+        """Synchronize our world state with Gunn's world state (bidirectional)."""
+        # First, sync FROM Gunn TO BattleWorldState (e.g., Move effects)
+        for agent_id in self.world_state.agents:
+            if agent_id in self.orchestrator.world_state.spatial_index:
+                new_pos = self.orchestrator.world_state.spatial_index[agent_id]
+                old_pos = self.world_state.agents[agent_id].position
+
+                # Only update if position changed
+                if old_pos != (new_pos[0], new_pos[1]):
+                    self.world_state.agents[agent_id].position = (
+                        new_pos[0],
+                        new_pos[1],
+                    )
+                    self._logger.info(
+                        f"Agent {agent_id} position updated: {old_pos} -> {(new_pos[0], new_pos[1])}"
+                    )
+
+        # Then, sync FROM BattleWorldState TO Gunn (for other state updates)
         gunn_entities = {}
         spatial_index = {}
 
-        # Add agents
+        # Add agents with their updated positions
         for agent_id, agent in self.world_state.agents.items():
             gunn_entities[agent_id] = agent.model_dump()
             spatial_index[agent_id] = (*agent.position, 0.0)
@@ -600,220 +650,6 @@ class BattleOrchestrator:
                 for team, messages in self.world_state.team_communications.items()
             },
         }
-
-    async def _process_agent_decision(self, agent_id: str) -> tuple[str, Any]:
-        """Process a single agent's decision (concurrent-safe).
-
-        This method generates an AI decision for a single agent and returns
-        both the agent ID and the decision result (or exception).
-
-        Args:
-            agent_id: ID of the agent to process
-
-        Returns:
-            Tuple of (agent_id, decision_or_exception)
-        """
-        try:
-            if not self.ai_decision_maker:
-                raise RuntimeError("AI decision maker not initialized")
-
-            # Get agent's current observation from Gunn
-            agent_handle = self.orchestrator.agent_handles.get(agent_id)
-            if not agent_handle:
-                raise ValueError(f"Agent {agent_id} not registered")
-
-            # Generate observation for this agent
-            observation_policy = self.orchestrator.observation_policies[agent_id]
-            observation = observation_policy.filter_world_state(
-                self.orchestrator.world_state, agent_id
-            )
-
-            # Convert Gunn View to dict for AI decision maker
-            observation_dict = {
-                "agent_id": agent_id,
-                "visible_entities": observation.visible_entities,
-                "visible_relationships": observation.visible_relationships,
-                "context_digest": observation.context_digest,
-                "view_seq": observation.view_seq,
-            }
-
-            # Generate AI decision
-            decision = await self.ai_decision_maker.make_decision(
-                agent_id, observation_dict, self.world_state
-            )
-
-            return (agent_id, decision)
-
-        except Exception as e:
-            # Return exception for error handling in concurrent processing
-            return (agent_id, e)
-
-    async def _process_concurrent_intents(
-        self, agent_decisions: dict[str, Any]
-    ) -> None:
-        """Process all agent intents concurrently in the same tick.
-
-        This method converts agent decisions to Gunn intents and submits them
-        all simultaneously to ensure true concurrent execution with deterministic
-        ordering based on agent_id sorting.
-
-        Args:
-            agent_decisions: Map of agent_id to AgentDecision or Exception
-        """
-        # Sort agent IDs for deterministic ordering
-        sorted_agent_ids = sorted(agent_decisions.keys())
-
-        # Convert decisions to intents for all agents
-        all_intents = []
-        current_sim_time = self.world_state.game_time
-
-        for agent_id in sorted_agent_ids:
-            decision = agent_decisions[agent_id]
-
-            # Skip agents with decision errors
-            if isinstance(decision, Exception):
-                self._logger.warning(
-                    f"Skipping agent {agent_id} due to decision error: {decision}"
-                )
-                continue
-
-            try:
-                # Convert decision to intents (primary action + optional communication)
-                intents = await self._decision_to_intents(agent_id, decision)
-
-                # Add sim_time to all intents for concurrent execution
-                for intent in intents:
-                    intent["sim_time"] = current_sim_time
-
-                all_intents.extend(intents)
-
-            except Exception as e:
-                self._logger.error(
-                    f"Error converting decision to intents for {agent_id}: {e}"
-                )
-                continue
-
-        # Submit all intents simultaneously using Gunn's batch submission
-        if all_intents:
-            try:
-                await self.orchestrator.submit_intents(all_intents, current_sim_time)
-                self._logger.info(
-                    f"Submitted {len(all_intents)} intents for {len(sorted_agent_ids)} agents"
-                )
-            except Exception as e:
-                self._logger.error(f"Error submitting concurrent intents: {e}")
-
-    async def _decision_to_intents(
-        self, agent_id: str, decision
-    ) -> list[dict[str, Any]]:
-        """Convert AI decision to Gunn intents (supports simultaneous action + communication).
-
-        This method converts an AgentDecision into one or more Gunn Intent objects,
-        supporting both primary actions and optional team communication.
-
-        Args:
-            agent_id: ID of the agent making the decision
-            decision: AgentDecision from AI decision maker
-
-        Returns:
-            List of Intent dictionaries ready for Gunn submission
-        """
-        import uuid
-
-        from ..shared.schemas import (
-            AttackAction,
-            HealAction,
-            MoveAction,
-            RepairAction,
-        )
-
-        intents = []
-        base_req_id = f"tick_{self._current_tick}_{agent_id}"
-
-        # Convert primary action to intent
-        primary_action = decision.primary_action
-
-        if isinstance(primary_action, MoveAction):
-            intents.append(
-                {
-                    "kind": "Move",
-                    "payload": {
-                        "target_position": primary_action.target_position,
-                        "reason": primary_action.reason,
-                    },
-                    "context_seq": 0,  # Will be updated by Gunn
-                    "req_id": f"{base_req_id}_move_{uuid.uuid4().hex[:8]}",
-                    "agent_id": agent_id,
-                    "priority": 0,
-                    "schema_version": "1.0.0",
-                }
-            )
-
-        elif isinstance(primary_action, AttackAction):
-            intents.append(
-                {
-                    "kind": "Attack",
-                    "payload": {
-                        "target_agent_id": primary_action.target_agent_id,
-                        "reason": primary_action.reason,
-                    },
-                    "context_seq": 0,
-                    "req_id": f"{base_req_id}_attack_{uuid.uuid4().hex[:8]}",
-                    "agent_id": agent_id,
-                    "priority": 1,  # Higher priority for combat actions
-                    "schema_version": "1.0.0",
-                }
-            )
-
-        elif isinstance(primary_action, HealAction):
-            intents.append(
-                {
-                    "kind": "Heal",
-                    "payload": {
-                        "target_agent_id": primary_action.target_agent_id or agent_id,
-                        "reason": primary_action.reason,
-                    },
-                    "context_seq": 0,
-                    "req_id": f"{base_req_id}_heal_{uuid.uuid4().hex[:8]}",
-                    "agent_id": agent_id,
-                    "priority": 0,
-                    "schema_version": "1.0.0",
-                }
-            )
-
-        elif isinstance(primary_action, RepairAction):
-            intents.append(
-                {
-                    "kind": "Repair",
-                    "payload": {"reason": primary_action.reason},
-                    "context_seq": 0,
-                    "req_id": f"{base_req_id}_repair_{uuid.uuid4().hex[:8]}",
-                    "agent_id": agent_id,
-                    "priority": 0,
-                    "schema_version": "1.0.0",
-                }
-            )
-
-        # Add communication intent if present
-        if decision.communication:
-            comm_action = decision.communication
-            intents.append(
-                {
-                    "kind": "Communicate",
-                    "payload": {
-                        "message": comm_action.message,
-                        "urgency": comm_action.urgency,
-                        "team_only": True,
-                    },
-                    "context_seq": 0,
-                    "req_id": f"{base_req_id}_comm_{uuid.uuid4().hex[:8]}",
-                    "agent_id": agent_id,
-                    "priority": -1,  # Lower priority for communication
-                    "schema_version": "1.0.0",
-                }
-            )
-
-        return intents
 
     async def process_effects(self, effects: list[dict[str, Any]]) -> dict[str, Any]:
         """
@@ -862,54 +698,3 @@ class BattleOrchestrator:
             Dictionary containing current game statistics
         """
         return self.game_status_manager.get_game_statistics(self.world_state)
-
-    async def process_concurrent_decisions(self) -> dict[str, Any]:
-        """Process decisions for all living agents concurrently.
-
-        This is the main method for concurrent agent decision processing,
-        implementing the requirements for parallel AI decision making and
-        simultaneous intent submission with deterministic ordering.
-
-        Returns:
-            Dictionary mapping agent_id to decision results
-        """
-        async with self._processing_lock:
-            self._current_tick += 1
-
-            # Get all living agents
-            living_agents = [
-                agent_id
-                for agent_id, agent in self.world_state.agents.items()
-                if agent.is_alive()
-            ]
-
-            if not living_agents:
-                return {}
-
-            # Sort agent IDs for deterministic ordering
-            living_agents.sort()
-
-            # Create concurrent decision tasks for all agents
-            decision_tasks = [
-                self._process_agent_decision(agent_id) for agent_id in living_agents
-            ]
-
-            # Execute all decision making concurrently
-            decision_results = await asyncio.gather(
-                *decision_tasks, return_exceptions=True
-            )
-
-            # Organize results by agent_id
-            agent_decisions = {}
-            for result in decision_results:
-                if isinstance(result, tuple) and len(result) == 2:
-                    agent_id, decision = result
-                    agent_decisions[agent_id] = decision
-                else:
-                    # Handle unexpected result format
-                    self._logger.error(f"Unexpected decision result format: {result}")
-
-            # Process all intents in the same tick for true concurrent execution
-            await self._process_concurrent_intents(agent_decisions)
-
-            return agent_decisions

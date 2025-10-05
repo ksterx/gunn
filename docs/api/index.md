@@ -1,6 +1,6 @@
-# API リファレンス
+# API Reference
 
-`gunn` の公開 API を Sphinx の autodoc で自動生成するためのエントリポイントです。必要に応じてサブモジュールごとのページを追加してください。
+Entry point for automatically generating `gunn`'s public API documentation using Sphinx's autodoc. Add pages for each submodule as needed.
 
 ```{toctree}
 :maxdepth: 2
@@ -12,10 +12,10 @@ adapters
 gunn
 ```
 
-## 自動生成のワークフロー
+## Auto-generation Workflow
 
-1. プロジェクトルートで `sphinx-apidoc -o docs/api src/gunn` を実行します。
-2. 生成された `*.rst`/`*.md` を MyST 形式に整えて上記の toctree に追記します。
-3. `make html` を実行して、イントロページやサンプルコードが期待通りにレンダリングされるか確認してください。
+1. Run `sphinx-apidoc -o docs/api src/gunn` from the project root.
+2. Format the generated `*.rst`/`*.md` files into MyST format and add them to the toctree above.
+3. Run `make html` to verify that intro pages and sample code render as expected.
 
-> **Note**: 自動生成を実施するまでは toctree のプレースホルダ（`orchestrator` など）は空のままでも構いません。不要であれば削除できます。
+> **Note**: Until auto-generation is performed, toctree placeholders (such as `orchestrator`) can remain empty and may be removed if unnecessary.

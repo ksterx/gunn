@@ -60,7 +60,7 @@ master_doc = "index"
 templates_path = ["_templates"]
 exclude_patterns: list[str] = ["_build", "Thumbs.db", ".DS_Store"]
 
-language = "ja"
+language = "en"
 
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
@@ -75,7 +75,7 @@ html_show_sourcelink = True
 html_last_updated_fmt = "%Y-%m-%d"
 
 html_theme_options = {
-    "announcement": "GitHub Pages で公開する最新版ドキュメントです。",
+    "announcement": "Latest documentation published on GitHub Pages.",
     "navigation_with_keys": True,
 }
 

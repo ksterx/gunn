@@ -50,6 +50,9 @@ class Effect(TypedDict):
     sim_time: Annotated[float, "Simulation time when this effect occurred"]
     source_id: Annotated[str, "ID of the system/agent that created this effect"]
     schema_version: Annotated[str, "Semantic versioning (e.g., '1.0.0')"]
+    req_id: Annotated[str | None, "Request ID for tracking action completion"]
+    duration_ms: Annotated[float | None, "Optional duration for interval effects"]
+    apply_at: Annotated[float | None, "Optional delayed application timestamp"]
 
 
 class ObservationDelta(TypedDict):
@@ -63,6 +66,8 @@ class ObservationDelta(TypedDict):
         str, "Hash digest of the resulting view state for integrity checking"
     ]
     schema_version: Annotated[str, "Schema version for compatibility"]
+    delivery_id: Annotated[str, "Unique identifier for this delivery attempt"]
+    redelivery: Annotated[bool, "Flag indicating this is a redelivery attempt"]
 
 
 class CancelToken:

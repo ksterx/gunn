@@ -1,9 +1,9 @@
 <!doctype html>
-<html class="no-js" lang="ja" data-content_root="./">
+<html class="no-js" lang="en" data-content_root="./">
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="索引" href="genindex.html"><link rel="search" title="検索" href="search.html"><link rel="next" title="ドキュメントビルドと公開手順" href="build-and-deploy.html"><link rel="prev" title="Web Adapter" href="web_adapter.html">
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Documentation Build and Deployment" href="build-and-deploy.html"><link rel="prev" title="Web Adapter" href="web_adapter.html">
         <link rel="canonical" href="https://ksterx.github.io/gunn/errors.html">
 
     <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
@@ -12,37 +12,37 @@
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=580074bf" />
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
-
-
+    
+    
 
 
 <style>
   body {
     --color-code-background: #f2f2f2;
   --color-code-foreground: #1e1e1e;
-
+  
   }
   @media not print {
     body[data-theme="dark"] {
       --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-
+  
     }
     @media (prefers-color-scheme: dark) {
       body:not([data-theme="light"]) {
         --color-code-background: #202020;
   --color-code-foreground: #d0d0d0;
-
+  
       }
     }
   }
 </style></head>
   <body>
-
+    
     <script>
       document.body.dataset.theme = localStorage.getItem("theme") || "auto";
     </script>
-
+    
 
 <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
   <symbol id="svg-toc" viewBox="0 0 24 24">
@@ -155,7 +155,7 @@
 
 <div class="announcement">
   <aside class="announcement-content">
-     GitHub Pages で公開する最新版ドキュメントです。
+     Latest documentation published on GitHub Pages. 
   </aside>
 </div>
 
@@ -185,18 +185,18 @@
   </header>
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
-
+      
       <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
-
+  
   <span class="sidebar-brand-text">gunn Documentation</span>
-
+  
 </a><form class="sidebar-search-container" method="get" action="search.html" role="search">
-  <input class="sidebar-search" placeholder="検索" name="q" aria-label="検索">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
   <input type="hidden" name="check_keywords" value="yes">
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">ガイド</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Guides</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="product.html">Product Overview</a></li>
 <li class="toctree-l1"><a class="reference internal" href="structure.html">Project Structure</a></li>
@@ -204,11 +204,28 @@
 <li class="toctree-l1"><a class="reference internal" href="integration-patterns.html">External Integration Patterns</a></li>
 <li class="toctree-l1"><a class="reference internal" href="web_adapter.html">Web Adapter</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Error Codes and Status Mappings</a></li>
-<li class="toctree-l1"><a class="reference internal" href="build-and-deploy.html">ドキュメントビルドと公開手順</a></li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API リファレンス</a><input aria-label="Toggle navigation of API リファレンス" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l1"><a class="reference internal" href="build-and-deploy.html">Documentation Build and Deployment</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="api/index.html">API Reference</a><input aria-label="Toggle navigation of API Reference" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="api/orchestrator.html">Orchestrator API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/facades.html">Facades API</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/adapters.html">Adapters API</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="api/gunn.html">gunn package</a><input aria-label="Toggle navigation of gunn package" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="api/gunn.adapters.html">gunn.adapters package</a><input aria-label="Toggle navigation of gunn.adapters package" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="api/gunn.adapters.llm.html">gunn.adapters.llm package</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/gunn.adapters.unity.html">gunn.adapters.unity package</a></li>
+<li class="toctree-l4"><a class="reference internal" href="api/gunn.adapters.web.html">gunn.adapters.web package</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.cli.html">gunn.cli package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.config.html">gunn.config package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.core.html">gunn.core package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.facades.html">gunn.facades package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.policies.html">gunn.policies package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.schemas.html">gunn.schemas package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.storage.html">gunn.storage package</a></li>
+<li class="toctree-l3"><a class="reference internal" href="api/gunn.utils.html">gunn.utils package</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -217,7 +234,7 @@
 </div>
 
       </div>
-
+      
     </div>
   </aside>
   <div class="main">
@@ -270,7 +287,7 @@
 <tbody>
 <tr class="row-even"><td><p>1001</p></td>
 <td><p>STALE_CONTEXT</p></td>
-<td><p>Agent's context is outdated relative to current world state</p></td>
+<td><p>Agent’s context is outdated relative to current world state</p></td>
 <td><p>409 Conflict</p></td>
 <td><p>FAILED_PRECONDITION</p></td>
 <td><p>REGENERATE</p></td>
@@ -369,7 +386,7 @@
 </tr>
 <tr class="row-odd"><td><p>3002</p></td>
 <td><p>QUEUE_FULL</p></td>
-<td><p>Agent's intent queue is at capacity</p></td>
+<td><p>Agent’s intent queue is at capacity</p></td>
 <td><p>503 Service Unavailable</p></td>
 <td><p>RESOURCE_EXHAUSTED</p></td>
 <td><p>SHED_OLDEST</p></td>
@@ -675,14 +692,14 @@
         </article>
       </div>
       <footer>
-
+        
         <div class="related-pages">
           <a class="next-page" href="build-and-deploy.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">ドキュメントビルドと公開手順</div>
+                <div class="title">Documentation Build and Deployment</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -692,9 +709,9 @@
                 <div class="context">
                   <span>Previous</span>
                 </div>
-
+                
                 <div class="title">Web Adapter</div>
-
+                
               </div>
             </a>
         </div>
@@ -704,21 +721,21 @@
                 Copyright &#169; 2025, gunn contributors
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
-
+            
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on 2025-09-28</div>
+              Last updated on 2025-10-04</div>
           </div>
           <div class="right-details">
-
+            
           </div>
         </div>
-
+        
       </footer>
     </div>
     <aside class="toc-drawer">
-
-
+      
+      
       <div class="toc-sticky toc-scroll">
         <div class="toc-title-container">
           <span class="toc-title">
@@ -750,16 +767,15 @@
           </div>
         </div>
       </div>
-
-
+      
+      
     </aside>
   </div>
-</div><script src="_static/documentation_options.js?v=2b5c797b"></script>
+</div><script src="_static/documentation_options.js?v=38b66d78"></script>
     <script src="_static/doctools.js?v=9bcbadda"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="_static/copybutton.js?v=f281be69"></script>
-    <script src="_static/translations.js?v=4755f45a"></script>
     </body>
 </html>

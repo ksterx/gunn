@@ -1,51 +1,51 @@
-# ドキュメントビルドと公開手順
+# Documentation Build and Deployment
 
-## 依存関係の準備
+## Preparing Dependencies
 
-ドキュメント関連の依存を `docs` グループで管理しています。初回は次を実行してインストールしてください。
+Documentation dependencies are managed in the `docs` group. For initial setup, run:
 
 ```bash
 uv sync --group docs
 ```
 
-## ローカルビルド
+## Local Build
 
-HTML を生成するにはプロジェクトルートで以下を実行します。
+To generate HTML documentation, run the following from the project root:
 
 ```bash
 uv run sphinx-build -b html docs docs/_build/html
 ```
 
-Makefile のショートカットも利用できます。
+You can also use the Makefile shortcut:
 
 ```bash
 cd docs
 make html
 ```
 
-ビルド結果は `docs/_build/html` に出力されるため、ブラウザで `index.html` を開いて確認できます。
+Build output is written to `docs/_build/html`, so you can open `index.html` in a browser to preview.
 
-## リンク検証
+## Link Validation
 
-外部リンクを検証するには `linkcheck` ビルダーを利用します。
+To validate external links, use the `linkcheck` builder:
 
 ```bash
 cd docs
 make linkcheck
 ```
 
-## GitHub Pages へのデプロイ
+## Deploying to GitHub Pages
 
-リポジトリには `Publish Docs` ワークフロー（`.github/workflows/docs-pages.yml`）を追加しています。`main` ブランチへの push ごとに Sphinx をビルドし、生成物を GitHub Pages（`gh-pages` ブランチ）へ反映します。
+The repository includes a `Publish Docs` workflow (`.github/workflows/docs-pages.yml`) that builds Sphinx documentation and deploys it to GitHub Pages (`gh-pages` branch) on every push to `main`.
 
-1. 初回のみ GitHub の **Settings → Pages** でソースを「GitHub Actions」に変更してください。
-2. ワークフローでは `uv sync --group docs` → `uv run sphinx-apidoc` → `uv run sphinx-build -b html` を順に実行し、`docs/_build/html` をアーティファクト化して Pages にデプロイします。
-3. Pages には `.nojekyll` を自動生成してアップロードするため、静的アセット（`_static` など）も確実に配信されます。追加設定は不要です。
+1. On first setup, go to **Settings → Pages** in GitHub and change the source to "GitHub Actions".
+2. The workflow runs `uv sync --group docs` → `uv run sphinx-apidoc` → `uv run sphinx-build -b html` in sequence, then artifacts `docs/_build/html` and deploys to Pages.
+3. A `.nojekyll` file is automatically generated and uploaded, ensuring static assets (`_static`, etc.) are served correctly. No additional configuration is required.
 
-手動で公開フローを検証したい場合は、同じコマンド列をローカルで実行し、`docs/_build/html` の内容をそのまま配信対象にすれば GitHub Pages と一致します。
+To manually verify the publishing workflow, run the same command sequence locally and use `docs/_build/html` content as-is for deployment—it will match the GitHub Pages output.
 
-## API リファレンスを更新する際のヒント
+## Tips for Updating API Reference
 
-- `sphinx-apidoc -o docs/api src/gunn` を利用すると自動でスタブを生成できます。
-- 生成済みファイルは必要に応じて MyST Markdown に書き換え、`api/index.md` の toctree に追加してください。
-- 新しいモジュールを公開する場合は docstring とタイプヒントを整備するとドキュメントが読みやすくなります。
+- Use `sphinx-apidoc -o docs/api src/gunn` to auto-generate stubs.
+- Convert generated files to MyST Markdown format as needed and add them to the toctree in `api/index.md`.
+- When publishing new modules, ensure docstrings and type hints are complete to improve documentation readability.

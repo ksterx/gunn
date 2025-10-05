@@ -203,7 +203,10 @@ class BattleRenderer:
                     data = json.loads(message)
                     message_type = data.get("type", "")
 
+                    logger.info(f"[WS] Received message type: {message_type}")
+
                     if message_type == "game_state_update":
+                        logger.info("[WS] Processing game state update")
                         await self._update_game_state(data.get("data", {}))
                     elif message_type == "action_result":
                         action_data = data.get("data", {})
@@ -256,10 +259,21 @@ class BattleRenderer:
     async def _update_game_state(self, state_data: dict[str, Any]) -> None:
         """Update the game state from received data."""
         try:
+            # Log old positions if we have existing game state
+            if self.game_state:
+                logger.info("[STATE] Old agent positions:")
+                for agent_id, agent in self.game_state.agents.items():
+                    logger.info(f"  {agent_id}: {agent.position}")
+
             # Convert the received data back to our models
             agents = {}
             for agent_id, agent_data in state_data.get("agents", {}).items():
                 agents[agent_id] = Agent(**agent_data)
+
+            # Log new positions
+            logger.info("[STATE] New agent positions:")
+            for agent_id, agent in agents.items():
+                logger.info(f"  {agent_id}: {agent.position}")
 
             map_locations = {}
             for loc_id, loc_data in state_data.get("map_locations", {}).items():
@@ -284,6 +298,7 @@ class BattleRenderer:
             )
 
             self.last_update_time = time.time()
+            logger.info(f"[STATE] Game state updated at {self.last_update_time}")
 
         except Exception as e:
             logger.error(f"Error updating game state: {e}")

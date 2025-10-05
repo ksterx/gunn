@@ -234,3 +234,88 @@
   - Create performance benchmark scenarios for load testing
   - Write comprehensive documentation and tutorials
   - _Requirements: All requirements demonstrated in working examples_
+
+- [x] 24. Implement asynchronous agent loop infrastructure
+  - Add get_current_observation() method to AgentHandle for immediate world state access
+  - Implement run_async_loop() method for continuous observe-think-act cycles
+  - Create AsyncAgentLogic abstract base class for pluggable agent behavior
+  - Add _wait_for_action_completion() method to ensure actions are processed before next observation
+  - Implement stop_async_loop() method for graceful agent shutdown
+  - Write unit tests for async loop timing, observation consistency, and error handling
+  - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5_
+
+- [x] 25. Create conversational agent implementation
+  - Implement ConversationalAgent class extending AsyncAgentLogic
+  - Add methods for extracting nearby agents and recent messages from observations
+  - Create context building logic for LLM input with conversation history
+  - Implement LLM integration for generating speak and move intents
+  - Add conversation memory and personality configuration
+  - Write unit tests for conversation flow, context building, and intent generation
+  - _Requirements: 14.6, 14.7, 14.8, 14.9_
+
+- [x] 26. Build collaborative behavior patterns
+  - Create helper methods for detecting collaboration opportunities in observations
+  - Implement coordination patterns through observed actions and communication
+  - Add support for multi-agent task coordination without explicit synchronization
+  - Create examples of emergent collaborative behavior (following, helping, group conversation)
+  - Write integration tests for collaborative scenarios and natural conversation flows
+  - _Requirements: 3.6, 4.6, 14.9_
+
+- [x] 27. Implement observation delivery guarantees
+  - Create DeliveryTracker class with at-least-once delivery and redelivery logic
+  - Add delivery_id and redelivery fields to ObservationDelta with idempotent handling
+  - Implement ack_observation() method in Orchestrator and AgentHandle
+  - Add configurable timeout and exponential backoff for redelivery attempts
+  - Create unit tests for delivery reliability, deduplication, and timeout handling
+  - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6_
+
+- [x] 28. Build action completion confirmation system
+  - Implement ActionCompletionTracker for tracking intent-to-effect completion
+  - Add automatic EffectApplied event emission when effects are applied to WorldState
+  - Create wait_effect_applied() method in Orchestrator with timeout handling
+  - Update AgentHandle._wait_for_action_completion() to use confirmation system
+  - Add req_id, duration_ms, and apply_at fields to Effect schema
+  - Write unit tests for completion tracking, timeout handling, and error scenarios
+  - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5_
+
+- [x] 29. Implement intelligent staleness detection
+  - Create SpatialObservationPolicy with intent-specific staleness logic
+  - Implement is_intent_stale() method for Move and Speak intents with spatial awareness
+  - Add staleness evaluation that only triggers on relevant precondition changes
+  - Create configurable staleness policies per intent type and agent
+  - Write unit tests for staleness accuracy, false positive prevention, and timing
+  - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6_
+
+- [x] 30. Build priority fairness and quota management
+  - Implement QuotaController with TokenBucket for per-agent rate limiting
+  - Create PriorityAging system to prevent starvation through wait-time priority increases
+  - Add weighted round-robin scheduling with aging-adjusted priorities
+  - Implement configurable quota policies and backpressure responses
+  - Write unit tests for fairness, starvation prevention, and quota enforcement
+  - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5_
+
+- [x] 31. Add temporal authority and action duration support
+  - Extend Effect schema with duration_ms and apply_at for interval effects
+  - Implement temporal authority resolution with configurable priority (external > sim_time > wall_time)
+  - Add support for Move actions with start/end timestamps for smooth interpolation
+  - Create conflict resolution for overlapping duration-based effects
+  - Write unit tests for temporal consistency, authority conflicts, and duration handling
+  - _Requirements: 19.1, 19.2, 19.3, 19.4, 19.5_
+
+- [x] 32. Implement storage consistency and replay invariance
+  - Create ReplayInvarianceValidator for comparing incremental vs full replay results
+  - Add periodic replay-invariance tests during long-running simulations
+  - Implement detailed diagnostics for consistency violations with recovery options
+  - Extend EventLog.validate_integrity() to include replay equivalence checks
+  - Write comprehensive tests for replay consistency, state integrity, and error recovery
+  - _Requirements: 20.1, 20.2, 20.3, 20.4, 20.5_
+
+- [x] 33. Create asynchronous multi-agent demo
+  - Build demo with 3-5 agents operating asynchronously with different LLM response times
+  - Implement conversation scenarios where agents interrupt and respond naturally
+  - Add spatial movement with agents observing and reacting to each other's positions
+  - Create collaborative task scenarios (e.g., agents working together to solve problems)
+  - Add visualization of agent states, observations, and decision-making processes
+  - Demonstrate all critical specifications: delivery guarantees, completion confirmation, intelligent staleness
+  - Write documentation and tutorials for asynchronous agent development
+  - _Requirements: 3.1, 3.2, 3.6, 4.1, 4.2, 4.5, 4.6, 14.1-14.9, 15.1-20.5_
