@@ -421,6 +421,189 @@ class BattleObservationPolicy(ObservationPolicy):
         return hashlib.sha256(canonical_bytes).hexdigest()
 
 
+class BattleEffectValidator:
+    """Custom effect validator for battle simulation with Speak intent support."""
+
+    def __init__(self, world_state: BattleWorldState):
+        """Initialize validator with world state reference.
+
+        Args:
+            world_state: Battle world state for validation
+        """
+        from gunn.core.orchestrator import DefaultEffectValidator
+
+        self.world_state = world_state
+        self.default_validator = DefaultEffectValidator()
+        self.logger = get_logger("battle_validator")
+
+    def set_agent_permissions(self, agent_id: str, permissions: set[str]) -> None:
+        """Set permissions for an agent (delegate to default validator).
+
+        Args:
+            agent_id: Agent identifier
+            permissions: Set of permission strings
+        """
+        self.default_validator.set_agent_permissions(agent_id, permissions)
+
+    def add_agent_permission(self, agent_id: str, permission: str) -> None:
+        """Add a permission for an agent (delegate to default validator).
+
+        Args:
+            agent_id: Agent identifier
+            permission: Permission string to add
+        """
+        self.default_validator.add_agent_permission(agent_id, permission)
+
+    def remove_agent_permission(self, agent_id: str, permission: str) -> None:
+        """Remove a permission for an agent (delegate to default validator).
+
+        Args:
+            agent_id: Agent identifier
+            permission: Permission string to remove
+        """
+        self.default_validator.remove_agent_permission(agent_id, permission)
+
+    def set_intent_kind_cooldown(
+        self, intent_kind: str, cooldown_seconds: float
+    ) -> None:
+        """Set cooldown for a specific intent kind (delegate to default validator).
+
+        Args:
+            intent_kind: Intent kind to set cooldown for
+            cooldown_seconds: Cooldown duration in seconds
+        """
+        self.default_validator.set_intent_kind_cooldown(intent_kind, cooldown_seconds)
+
+    def get_agent_quota_status(self, agent_id: str) -> dict[str, Any]:
+        """Get current quota status for an agent (delegate to default validator).
+
+        Args:
+            agent_id: Agent identifier
+
+        Returns:
+            Dictionary with quota status information
+        """
+        return self.default_validator.get_agent_quota_status(agent_id)
+
+    def validate_intent(self, intent: dict[str, Any], world_state: WorldState) -> bool:
+        """Validate intent and return True if valid.
+
+        Args:
+            intent: Intent to validate
+            world_state: Current world state from Gunn
+
+        Returns:
+            True if valid, raises ValidationError otherwise
+        """
+        intent_kind = intent.get("kind", "")
+
+        # Handle Speak intent
+        if intent_kind == "Speak":
+            is_valid, reason = self._validate_speak_intent(intent)
+            self.logger.info(
+                f"[VALIDATOR] Speak intent validation: valid={is_valid}, reason={reason}, agent={intent.get('agent_id')}"
+            )
+            if not is_valid:
+                from gunn.utils.errors import ValidationError
+
+                raise ValidationError(intent, [reason])
+            return True
+
+        # Delegate to default validator for other intents
+        return self.default_validator.validate_intent(intent, world_state)
+
+    def _validate_speak_intent(self, intent: dict[str, Any]) -> tuple[bool, str]:
+        """Validate Speak intent.
+
+        Args:
+            intent: Speak intent to validate
+
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        payload = intent.get("payload", {})
+        agent_id = intent.get("agent_id", "")
+        message = payload.get("message", "")
+        urgency = payload.get("urgency", "medium")
+
+        # Validate agent exists and is alive
+        agent = self.world_state.agents.get(agent_id)
+        if not agent:
+            return False, f"Agent {agent_id} not found"
+
+        if not agent.is_alive():
+            return False, "Dead agents cannot speak"
+
+        # Validate message
+        if not message or not message.strip():
+            return False, "Message cannot be empty"
+
+        if len(message) > 200:
+            return False, "Message too long (max 200 characters)"
+
+        # Validate urgency
+        if urgency not in ["low", "medium", "high"]:
+            return False, f"Invalid urgency: {urgency}"
+
+        return True, "Valid speak intent"
+
+    def intent_to_effect(
+        self, intent: dict[str, Any], world_state: WorldState
+    ) -> Effect:
+        """Convert validated intent to effect.
+
+        Args:
+            intent: Validated intent
+            world_state: Current world state from Gunn
+
+        Returns:
+            Effect to apply
+        """
+        intent_kind = intent.get("kind", "")
+
+        # Handle Speak intent
+        if intent_kind == "Speak":
+            return self._speak_to_team_message(intent)
+
+        # Delegate to default validator for other intents (this will raise NotImplementedError)
+        # For now, we don't convert other intents to effects in the validator
+        raise NotImplementedError(f"intent_to_effect not implemented for {intent_kind}")
+
+    def _speak_to_team_message(self, intent: dict[str, Any]) -> Effect:
+        """Convert Speak intent to TeamMessage effect.
+
+        Args:
+            intent: Speak intent
+
+        Returns:
+            TeamMessage effect
+        """
+        payload = intent.get("payload", {})
+        agent_id = intent.get("agent_id", "")
+        agent = self.world_state.agents.get(agent_id)
+
+        if not agent:
+            raise ValueError(f"Agent {agent_id} not found")
+
+        effect = Effect(
+            kind="TeamMessage",
+            payload={
+                "sender_id": agent_id,
+                "sender_team": agent.team,
+                "message": payload.get("message", ""),
+                "urgency": payload.get("urgency", "medium"),
+                "timestamp": self.world_state.game_time,
+            },
+            source_id=agent_id,
+            priority=0,
+        )
+
+        self.logger.info(
+            f"[VALIDATOR] Created TeamMessage effect: agent={agent_id}, team={agent.team}, message={payload.get('message', '')[:50]}"
+        )
+        return effect
+
+
 class BattleOrchestrator:
     """Wrapper around Gunn orchestrator for battle simulation.
 
@@ -432,12 +615,17 @@ class BattleOrchestrator:
     def __init__(self):
         """Initialize the battle orchestrator."""
         from gunn import Orchestrator, OrchestratorConfig
-        from gunn.core.orchestrator import DefaultEffectValidator
+
+        # Battle-specific state (initialize first for validator)
+        self.world_state = BattleWorldState()
+
+        # Create custom validator with world state reference
+        self.effect_validator = BattleEffectValidator(self.world_state)
 
         # Configure Gunn orchestrator for battle simulation
         config = OrchestratorConfig(
             max_agents=6,  # 3 per team
-            staleness_threshold=30,  # Allow more updates during AI decision-making
+            staleness_threshold=50,  # Allow more updates during AI decision-making
             debounce_ms=50.0,
             deadline_ms=3000.0,
             token_budget=500,
@@ -450,11 +638,9 @@ class BattleOrchestrator:
         )
 
         self.orchestrator = Orchestrator(
-            config, world_id="battle_demo", effect_validator=DefaultEffectValidator()
+            config, world_id="battle_demo", effect_validator=self.effect_validator
         )
 
-        # Battle-specific state
-        self.world_state = BattleWorldState()
         self.ai_decision_maker = None  # Will be set externally
         self._initialized = False
 
@@ -464,6 +650,10 @@ class BattleOrchestrator:
 
         # Async agent tasks (independent agent loops)
         self._agent_tasks: list[asyncio.Task] = []
+
+        # Effect polling for broadcasting
+        self._last_processed_seq = 0
+        self._effect_polling_task: asyncio.Task | None = None
 
         # Logging
         self._logger = get_logger("battle_orchestrator")
@@ -493,12 +683,26 @@ class BattleOrchestrator:
         # Sync with Gunn's world state
         await self._sync_world_state()
 
+        # Start effect polling loop for broadcasting
+        if self._effect_polling_task is None or self._effect_polling_task.done():
+            self._effect_polling_task = asyncio.create_task(self._poll_effects_loop())
+            self._logger.info("Started effect polling loop")
+
         self._initialized = True
 
     async def reset(self) -> None:
         """Reset the orchestrator to allow reinitialization."""
         self._logger.info("Resetting battle orchestrator")
         self._initialized = False
+
+        # Cancel effect polling task
+        if self._effect_polling_task and not self._effect_polling_task.done():
+            self._effect_polling_task.cancel()
+            try:
+                await self._effect_polling_task
+            except asyncio.CancelledError:
+                pass
+            self._effect_polling_task = None
 
         # Cancel all agent tasks
         for task in self._agent_tasks:
@@ -527,6 +731,52 @@ class BattleOrchestrator:
         """
         self.effect_processor._action_callback = callback
         self._logger.info("Action callback set for effect processor")
+
+    async def _poll_effects_loop(self) -> None:
+        """Poll EventLog for new effects and process them for broadcasting.
+
+        This loop runs continuously, checking for new effects since the last
+        processed sequence number. Effects are forwarded to the EffectProcessor
+        which handles broadcasting to WebSocket clients.
+        """
+        self._logger.info("Effect polling loop started")
+
+        try:
+            while True:
+                try:
+                    # Get effects since last processed sequence number
+                    recent_entries = self.orchestrator.event_log.get_entries_since(
+                        self._last_processed_seq
+                    )
+
+                    if recent_entries:
+                        # Extract effects from entries
+                        effects = [entry.effect for entry in recent_entries]
+
+                        # Log polling activity
+                        self._logger.debug(
+                            f"[POLL] Processing {len(effects)} new effects, "
+                            f"seq {self._last_processed_seq + 1} to {recent_entries[-1].global_seq}"
+                        )
+
+                        # Process effects through EffectProcessor
+                        await self.effect_processor.process_effects(
+                            effects, self.world_state
+                        )
+
+                        # Update checkpoint
+                        self._last_processed_seq = recent_entries[-1].global_seq
+
+                    # Poll every 100ms for low latency
+                    await asyncio.sleep(0.1)
+
+                except Exception as e:
+                    self._logger.error(f"Error in effect polling loop: {e}")
+                    await asyncio.sleep(1.0)  # Back off on error
+
+        except asyncio.CancelledError:
+            self._logger.info("Effect polling loop cancelled")
+            raise
 
     async def _setup_battle_world(self) -> None:
         """Create initial world state with teams and map locations."""
@@ -589,11 +839,12 @@ class BattleOrchestrator:
             # Register agent with orchestrator
             handle = await self.orchestrator.register_agent(agent_id, policy)
 
-            # Create BattleAgent instance
+            # Create BattleAgent instance with handle reference
             battle_agent = BattleAgent(
                 agent_id=agent_id,
                 ai_decision_maker=self.ai_decision_maker,
                 world_state=self.world_state,
+                agent_handle=handle,
             )
 
             # Start async agent loop for independent execution

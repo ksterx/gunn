@@ -16,15 +16,18 @@ from ..shared.models import BattleWorldState, TeamCommunication
 class EffectProcessor:
     """Processes effects and updates world state accordingly."""
 
-    def __init__(self, action_callback=None):
+    def __init__(self, action_callback=None, broadcast_callback=None):
         """Initialize the effect processor.
 
         Args:
             action_callback: Optional callback function to notify about action results.
                              Signature: async def callback(agent_id, action_type, success, details)
+            broadcast_callback: Optional callback function for WebSocket broadcasting.
+                                Signature: async def callback(team, payload)
         """
         self._logger = get_logger("effect_processor")
         self._action_callback = action_callback
+        self._broadcast_callback = broadcast_callback
 
         # Map effect kinds to their handler methods
         self._effect_handlers = {
@@ -34,6 +37,7 @@ class EffectProcessor:
             "AgentHealed": self._handle_agent_healed,
             "WeaponRepaired": self._handle_weapon_repaired,
             "TeamMessage": self._handle_team_message,
+            "Speak": self._handle_speak_effect,
             "Move": self._handle_agent_move,
             "AttackFailed": self._handle_attack_failed,
             "HealFailed": self._handle_heal_failed,
@@ -397,6 +401,56 @@ class EffectProcessor:
 
         except Exception as e:
             self._logger.error(f"Failed to create team communication: {e}")
+
+    async def _handle_speak_effect(
+        self, effect: dict[str, Any], world_state: BattleWorldState
+    ) -> None:
+        """Handle Speak effect by broadcasting to WebSocket clients.
+
+        Speak effects are Gunn's built-in communication mechanism. This handler
+        converts them to team communications and broadcasts via WebSocket.
+
+        Args:
+            effect: Speak effect from Gunn orchestrator
+            world_state: World state to update
+        """
+        sender_id = effect.get("source_id")
+        payload = effect.get("payload", {})
+
+        self._logger.info(
+            f"[COMM] Handling Speak effect: sender={sender_id}, "
+            f"message={payload.get('message', '')[:50]}"
+        )
+
+        if not sender_id or sender_id not in world_state.agents:
+            self._logger.warning(f"[COMM] Speak effect has invalid sender: {sender_id}")
+            return
+
+        sender_agent = world_state.agents[sender_id]
+        sender_team = sender_agent.team
+
+        # Convert Speak effect to team communication format
+        comm_payload = {
+            "sender_id": sender_id,
+            "sender_team": sender_team,
+            "message": payload.get("message", ""),
+            "urgency": payload.get("urgency", "medium"),
+            "timestamp": world_state.game_time,
+        }
+
+        # Broadcast via WebSocket callback if available
+        if self._broadcast_callback:
+            try:
+                self._logger.info(
+                    f"[COMM] Broadcasting Speak as team communication: {comm_payload}"
+                )
+                await self._broadcast_callback(sender_team, comm_payload)
+            except Exception as e:
+                self._logger.error(f"[COMM] Failed to broadcast Speak effect: {e}")
+        else:
+            self._logger.warning(
+                "[COMM] No broadcast callback registered, Speak effect not broadcast"
+            )
 
     async def _handle_agent_move(
         self, effect: dict[str, Any], world_state: BattleWorldState

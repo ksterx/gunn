@@ -6,6 +6,7 @@ async agent framework to provide independent, asynchronous decision-making
 for each agent in the battle simulation.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -32,6 +33,7 @@ class BattleAgent(AsyncAgentLogic):
         agent_id: str,
         ai_decision_maker: AIDecisionMaker,
         world_state: BattleWorldState,
+        agent_handle=None,
     ):
         """Initialize battle agent.
 
@@ -39,10 +41,12 @@ class BattleAgent(AsyncAgentLogic):
             agent_id: Unique identifier for this agent
             ai_decision_maker: AI decision maker for generating actions
             world_state: Shared world state reference for context
+            agent_handle: Optional agent handle for submitting intents (set later)
         """
         self.agent_id = agent_id
         self.ai_decision_maker = ai_decision_maker
         self.world_state = world_state
+        self.agent_handle = agent_handle
 
         # Agent-specific state
         self.observations_processed = 0
@@ -80,8 +84,20 @@ class BattleAgent(AsyncAgentLogic):
                 observation_dict = observation
 
             # Update current view_seq from observation
-            if isinstance(observation_dict, dict):
+            # First try to get from observation object
+            if hasattr(observation, "view_seq"):
+                self.current_view_seq = observation.view_seq
+            elif isinstance(observation_dict, dict):
                 self.current_view_seq = observation_dict.get("view_seq", 0)
+
+            # Also sync with agent_handle's view_seq
+            if self.agent_handle and hasattr(self.agent_handle, "view_seq"):
+                # Update agent_handle's view_seq to match observation
+                self.agent_handle.view_seq = self.current_view_seq
+
+            logger.debug(
+                f"Agent {self.agent_id} received observation with view_seq={self.current_view_seq}"
+            )
 
             # Get agent data from world state
             agent_data = self.world_state.agents.get(self.agent_id)
@@ -109,8 +125,29 @@ class BattleAgent(AsyncAgentLogic):
                 f"Agent {self.agent_id} made decision: {decision.primary_action.action_type}"
             )
 
+            # Get latest observation to get most up-to-date view_seq
+            if self.agent_handle:
+                try:
+                    latest_obs = await self.agent_handle.get_current_observation()
+                    if hasattr(latest_obs, "view_seq"):
+                        self.current_view_seq = latest_obs.view_seq
+                        # Also update agent_handle's view_seq
+                        self.agent_handle.view_seq = latest_obs.view_seq
+                        logger.debug(
+                            f"Agent {self.agent_id} updated to latest view_seq={self.current_view_seq} before intent submission"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to get latest observation for {self.agent_id}: {e}"
+                    )
+
             # Convert decision to intent with current view_seq
             intent = self._decision_to_intent(decision)
+
+            # Handle communication separately if present (as background task)
+            if decision.communication and self.agent_handle:
+                asyncio.create_task(self._send_communication(decision.communication))
+
             return intent
 
         except Exception as e:
@@ -137,6 +174,61 @@ class BattleAgent(AsyncAgentLogic):
             "teammates": teammates,
             "strategy": "coordinate with teammates and eliminate enemies",
         }
+
+    async def _send_communication(self, communication: "CommunicateAction") -> None:
+        """Send team communication through orchestrator.
+
+        Args:
+            communication: Communication action from AI decision
+        """
+        import time
+        import uuid
+
+        try:
+            # Get latest observation to get most up-to-date view_seq
+            current_seq = self.current_view_seq
+            if self.agent_handle:
+                try:
+                    latest_obs = await self.agent_handle.get_current_observation()
+                    if hasattr(latest_obs, "view_seq"):
+                        current_seq = latest_obs.view_seq
+                        # Also update agent_handle's view_seq
+                        self.agent_handle.view_seq = latest_obs.view_seq
+                        logger.debug(
+                            f"Agent {self.agent_id} using latest view_seq={current_seq} for communication"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to get latest observation for communication: {e}"
+                    )
+
+            # Create communication intent
+            intent = {
+                "kind": "Speak",
+                "payload": {
+                    "message": communication.message,
+                    "urgency": communication.urgency,
+                },
+                "context_seq": current_seq,
+                "req_id": f"{self.agent_id}_{time.time()}_speak_{uuid.uuid4().hex[:8]}",
+                "agent_id": self.agent_id,
+                "priority": 0,
+                "schema_version": "1.0.0",
+            }
+
+            logger.info(
+                f"Agent {self.agent_id} sending message: {communication.message[:50]}..."
+            )
+
+            # Submit intent through agent handle
+            if self.agent_handle:
+                await self.agent_handle.submit_intent(intent)
+                logger.debug(f"Communication intent submitted for {self.agent_id}")
+            else:
+                logger.warning(f"No agent handle available for {self.agent_id}")
+
+        except Exception as e:
+            logger.warning(f"Failed to send communication for {self.agent_id}: {e}")
 
     def _decision_to_intent(self, decision: AgentDecision) -> dict[str, Any]:
         """Convert AI decision to Gunn intent.

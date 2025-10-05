@@ -743,6 +743,18 @@ class BattleAPIServer:
                             )
                             break  # Exit loop if keepalive fails
 
+                    except (WebSocketDisconnect, RuntimeError) as e:
+                        # Client disconnected or connection already closed
+                        if "disconnect" in str(e).lower():
+                            logger.info(
+                                f"WebSocket client disconnected: {connection_id}"
+                            )
+                        else:
+                            logger.debug(
+                                f"WebSocket connection closed: {connection_id}"
+                            )
+                        break  # Exit loop cleanly
+
                     except Exception as e:
                         ws_error = WebSocketError(
                             message=f"Unexpected WebSocket error: {e!s}",
@@ -815,6 +827,14 @@ class BattleAPIServer:
                     )
                 )
                 logger.info("Action result callback connected")
+
+                # Connect broadcast callback for Speak effects to WebSocket clients
+                self.orchestrator.effect_processor._broadcast_callback = (
+                    lambda team, payload: asyncio.create_task(
+                        self._broadcast_team_communication(team, payload)
+                    )
+                )
+                logger.info("Broadcast callback connected for Speak effects")
 
                 await self._start_game_loop()
                 logger.info("Game auto-started successfully")
@@ -1125,6 +1145,7 @@ class BattleAPIServer:
                 payload = effect.get("payload", {})
 
                 # Update team scores based on effects
+                # Update team scores for kills
                 if effect_kind == "AgentDied":
                     killer_id = payload.get("killer_id")
                     if killer_id and killer_id in self.orchestrator.world_state.agents:
@@ -1133,11 +1154,8 @@ class BattleAPIServer:
                         ].team
                         self.orchestrator.world_state.team_scores[killer_team] += 10
 
-                # Broadcast team communication effects with team visibility filtering
-                elif effect_kind == "TeamMessage":
-                    sender_team = payload.get("sender_team")
-                    if sender_team:
-                        await self._broadcast_team_communication(sender_team, payload)
+                # Note: Speak and TeamMessage effects are now handled by
+                # EffectProcessor via the effect polling loop
 
             except Exception as e:
                 logger.error(
@@ -1201,6 +1219,7 @@ class BattleAPIServer:
         """
         try:
             if not self.connection_manager.active_connections:
+                logger.warning("[COMM] No active connections for team communication")
                 return
 
             # Create team communication message
@@ -1216,6 +1235,10 @@ class BattleAPIServer:
                 },
                 "timestamp": time.time(),
             }
+
+            logger.info(
+                f"[COMM] Broadcasting team communication: sender={communication.get('sender_id')}, message={communication.get('message')[:50]}"
+            )
 
             # For demo purposes, broadcast to all connections
             # In a real implementation, you would filter by team membership

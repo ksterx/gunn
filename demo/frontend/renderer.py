@@ -228,6 +228,7 @@ class BattleRenderer:
                     elif message_type == "team_communication":
                         comm_data = data.get("data", {})
                         sender_id = comm_data.get("sender_id")
+                        logger.info(f"[COMM] Received team_communication: {comm_data}")
                         if sender_id:
                             self.agent_recent_communications[sender_id] = {
                                 "message": comm_data.get("message", ""),
@@ -235,7 +236,14 @@ class BattleRenderer:
                                 "timestamp": time.time(),
                             }
                             logger.info(
-                                f"Communication recorded for {sender_id}: {comm_data.get('message')[:30]}"
+                                f"[COMM] Communication recorded for {sender_id}: {comm_data.get('message')[:30]}"
+                            )
+                            logger.info(
+                                f"[COMM] Total communications stored: {len(self.agent_recent_communications)}"
+                            )
+                        else:
+                            logger.warning(
+                                f"[COMM] No sender_id in communication: {comm_data}"
                             )
                     elif message_type == "game_ended":
                         logger.info(f"Game ended: {data.get('data', {})}")
@@ -436,36 +444,127 @@ class BattleRenderer:
                     self.screen.blit(action_text, text_rect)
                     y_offset -= 20
 
-            # Show recent communication (within last 6 seconds)
+            # Show recent communication (within last 8 seconds) with speech bubble
             if agent.agent_id in self.agent_recent_communications:
                 comm_info = self.agent_recent_communications[agent.agent_id]
                 age = current_time - comm_info.get("timestamp", 0)
-                if age < 6.0:  # Show for 6 seconds
+                logger.debug(
+                    f"[RENDER] Agent {agent.agent_id} has communication, age={age:.2f}s"
+                )
+                if age < 8.0:  # Show for 8 seconds
                     message = comm_info.get("message", "")
                     urgency = comm_info.get("urgency", "medium")
 
-                    # Truncate long messages
-                    if len(message) > 25:
-                        message = message[:22] + "..."
+                    # Split long messages into multiple lines
+                    max_chars_per_line = 30
+                    words = message.split()
+                    lines = []
+                    current_line = ""
+
+                    for word in words:
+                        test_line = current_line + (" " if current_line else "") + word
+                        if len(test_line) <= max_chars_per_line:
+                            current_line = test_line
+                        else:
+                            if current_line:
+                                lines.append(current_line)
+                            current_line = word
+                    if current_line:
+                        lines.append(current_line)
+
+                    # Limit to 3 lines
+                    if len(lines) > 3:
+                        lines = lines[:3]
+                        lines[-1] = lines[-1][:27] + "..."
 
                     # Color based on urgency
                     urgency_colors = {
-                        "low": self.colors["text_dim"],
-                        "medium": (255, 255, 150),
-                        "high": (255, 100, 100),
+                        "low": (200, 200, 255),
+                        "medium": (255, 255, 200),
+                        "high": (255, 150, 150),
                     }
-                    comm_color = urgency_colors.get(urgency, self.colors["text"])
+                    text_color = urgency_colors.get(urgency, (255, 255, 255))
 
-                    comm_text = self.font_medium.render(message, True, comm_color)
-                    text_rect = comm_text.get_rect(center=(screen_x, y_offset))
+                    # Background color based on urgency
+                    bg_colors = {
+                        "low": (40, 40, 60, 230),
+                        "medium": (60, 60, 40, 230),
+                        "high": (70, 40, 40, 230),
+                    }
+                    bg_color = bg_colors.get(urgency, (40, 40, 40, 230))
 
-                    # Draw semi-transparent background for readability
-                    bg_rect = text_rect.inflate(8, 4)
-                    bg_surface = pygame.Surface(bg_rect.size, pygame.SRCALPHA)
-                    bg_surface.fill((0, 0, 0, 200))
-                    self.screen.blit(bg_surface, bg_rect)
+                    # Calculate bubble dimensions
+                    line_height = 18
+                    padding = 8
+                    max_line_width = max(
+                        self.font_small.size(line)[0] for line in lines
+                    )
+                    bubble_width = max_line_width + padding * 2
+                    bubble_height = len(lines) * line_height + padding * 2
 
-                    self.screen.blit(comm_text, text_rect)
+                    # Position bubble above agent
+                    bubble_x = screen_x - bubble_width // 2
+                    bubble_y = y_offset - 10
+
+                    # Draw speech bubble background with rounded corners
+                    bubble_rect = pygame.Rect(
+                        bubble_x, bubble_y, bubble_width, bubble_height
+                    )
+                    bubble_surface = pygame.Surface(
+                        (bubble_width, bubble_height), pygame.SRCALPHA
+                    )
+                    pygame.draw.rect(
+                        bubble_surface,
+                        bg_color,
+                        bubble_surface.get_rect(),
+                        border_radius=8,
+                    )
+
+                    # Draw bubble border
+                    border_color = (
+                        min(bg_color[0] + 40, 255),
+                        min(bg_color[1] + 40, 255),
+                        min(bg_color[2] + 40, 255),
+                        255,
+                    )
+                    pygame.draw.rect(
+                        bubble_surface,
+                        border_color,
+                        bubble_surface.get_rect(),
+                        2,
+                        border_radius=8,
+                    )
+
+                    # Draw small triangle pointer
+                    pointer_size = 6
+                    pointer_points = [
+                        (bubble_width // 2 - pointer_size, bubble_height),
+                        (bubble_width // 2 + pointer_size, bubble_height),
+                        (bubble_width // 2, bubble_height + pointer_size),
+                    ]
+                    pygame.draw.polygon(bubble_surface, bg_color, pointer_points)
+                    pygame.draw.lines(
+                        bubble_surface,
+                        border_color,
+                        False,
+                        [pointer_points[0], pointer_points[2], pointer_points[1]],
+                        2,
+                    )
+
+                    self.screen.blit(bubble_surface, bubble_rect)
+
+                    # Render text lines
+                    text_y = bubble_y + padding
+                    for line in lines:
+                        line_text = self.font_small.render(line, True, text_color)
+                        line_rect = line_text.get_rect(
+                            center=(screen_x, text_y + line_height // 2)
+                        )
+                        self.screen.blit(line_text, line_rect)
+                        text_y += line_height
+
+                    # Update y_offset for any additional elements above
+                    y_offset = bubble_y - 5
 
             # Draw vision range (if debug mode)
             if self.show_debug_info:
