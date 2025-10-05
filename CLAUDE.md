@@ -53,9 +53,11 @@ python demo/frontend/__main__.py         # Frontend (pygame)
 ```
 
 ### Important Testing Notes
-- Unit tests are **co-located** with source code using `test_*.py` pattern
-- Integration tests are in `tests/integration/`
-- Performance tests in `tests/performance/`
+- **Unit tests**: Located in `tests/unit/` organized by module (core, policies, utils, etc.)
+- **Integration tests**: Located in `tests/integration/`
+- **Performance tests**: Located in `tests/performance/`
+- **Contract tests**: Located in `tests/contract/` for schema validation
+- **Demo tests**: Located in `demo/tests/` for demo-specific functionality
 - Always use `uv run pytest`, never bare `pytest`
 - Async tests use `pytest-asyncio` with `asyncio_mode = "auto"`
 
@@ -186,8 +188,12 @@ The system is designed to meet:
 - Timeout-aware operations with `asyncio.wait_for()`
 
 ### Testing Patterns
-- Co-locate unit tests with source: `test_*.py` alongside implementation
-- Integration tests in `tests/integration/`
+- **Unit tests structure**: Mirror source structure in `tests/unit/`
+  - `tests/unit/core/` for core module tests
+  - `tests/unit/policies/` for policy tests
+  - `tests/unit/utils/` for utility tests
+  - etc.
+- **Integration tests**: In `tests/integration/` for cross-module scenarios
 - Use fixtures for common test setup
 - Mock external dependencies (LLM APIs, databases)
 - Test both success and failure paths
@@ -210,6 +216,7 @@ Follow Conventional Commits:
 4. **Don't assume ordering without priority**: Use explicit priorities for intent ordering
 5. **Don't forget staleness checks**: Always validate `context_seq` before processing intents
 6. **Don't use `pip`**: Always use `uv` for dependency management
+7. **Don't put test files in src/**: All tests belong in `tests/` directory, not co-located with source
 
 ## Demo Applications
 

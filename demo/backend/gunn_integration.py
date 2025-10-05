@@ -437,7 +437,7 @@ class BattleOrchestrator:
         # Configure Gunn orchestrator for battle simulation
         config = OrchestratorConfig(
             max_agents=6,  # 3 per team
-            staleness_threshold=1,
+            staleness_threshold=30,  # Allow more updates during AI decision-making
             debounce_ms=50.0,
             deadline_ms=3000.0,
             token_budget=500,

@@ -197,7 +197,9 @@ class BattleRenderer:
 
     async def _websocket_listener(self) -> None:
         """Listen for WebSocket messages and update game state."""
+        logger.info("[WS] WebSocket listener task started")
         try:
+            logger.info("[WS] Entering message receive loop")
             async for message in self.websocket:
                 try:
                     data = json.loads(message)
@@ -248,13 +250,15 @@ class BattleRenderer:
                 except Exception as e:
                     logger.error(f"Error processing WebSocket message: {e}")
 
-        except websockets.exceptions.ConnectionClosed:
-            logger.info("WebSocket connection closed")
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.info(f"WebSocket connection closed: {e}")
             self.connection_status = "disconnected"
         except Exception as e:
-            logger.error(f"WebSocket listener error: {e}")
+            logger.error(f"WebSocket listener error: {e}", exc_info=True)
             self.connection_status = "error"
             self.error_message = f"WebSocket error: {e!s}"
+        finally:
+            logger.info("[WS] WebSocket listener task exiting")
 
     async def _update_game_state(self, state_data: dict[str, Any]) -> None:
         """Update the game state from received data."""

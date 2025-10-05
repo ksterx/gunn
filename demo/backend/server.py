@@ -1158,7 +1158,7 @@ class BattleAPIServer:
                 # Log agent positions being broadcast
                 logger.info("[BROADCAST] Broadcasting agent positions:")
                 for agent_id, agent in game_state.agents.items():
-                    logger.info(f"  {agent_id}: {agent.position}")
+                    logger.info(f"  {agent_id}: {agent['position']}")
 
                 message = {
                     "type": "game_state_update",
