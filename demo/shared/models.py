@@ -35,7 +35,7 @@ class Agent(BaseModel):
         default=50.0, gt=0.0, description="Range for team communication"
     )
     vision_range: float = Field(
-        default=30.0, gt=0.0, description="Range for observing enemies"
+        default=90.0, gt=0.0, description="Range for observing enemies"
     )
     attack_range: float = Field(
         default=15.0, gt=0.0, description="Range for attacking enemies"

@@ -245,6 +245,43 @@ class BattleRenderer:
                             logger.warning(
                                 f"[COMM] No sender_id in communication: {comm_data}"
                             )
+
+                    # Add communication to the main game state for the new UI
+                    if self.game_state and message_type == "team_communication":
+                        comm_data = data.get("data", {})
+                        team = comm_data.get("team")
+                        if team and team in self.game_state.team_communications:
+                            try:
+                                # Create a TeamCommunication object
+                                new_comm = TeamCommunication(**comm_data)
+
+                                # Append to the list
+                                self.game_state.team_communications[team].append(
+                                    new_comm
+                                )
+
+                                # Keep the list from growing indefinitely
+                                max_comms = 50
+                                if (
+                                    len(self.game_state.team_communications[team])
+                                    > max_comms
+                                ):
+                                    self.game_state.team_communications[team] = (
+                                        self.game_state.team_communications[team][
+                                            -max_comms:
+                                        ]
+                                    )
+
+                                logger.info(
+                                    f"[COMM] Added message to game_state.team_communications for {team}. "
+                                    f"New count: {len(self.game_state.team_communications[team])}"
+                                )
+
+                            except Exception as e:
+                                logger.error(
+                                    f"[COMM] Error adding communication to game state: {e}"
+                                )
+
                     elif message_type == "game_ended":
                         logger.info(f"Game ended: {data.get('data', {})}")
                     elif message_type == "keepalive":
@@ -443,128 +480,6 @@ class BattleRenderer:
 
                     self.screen.blit(action_text, text_rect)
                     y_offset -= 20
-
-            # Show recent communication (within last 8 seconds) with speech bubble
-            if agent.agent_id in self.agent_recent_communications:
-                comm_info = self.agent_recent_communications[agent.agent_id]
-                age = current_time - comm_info.get("timestamp", 0)
-                logger.debug(
-                    f"[RENDER] Agent {agent.agent_id} has communication, age={age:.2f}s"
-                )
-                if age < 8.0:  # Show for 8 seconds
-                    message = comm_info.get("message", "")
-                    urgency = comm_info.get("urgency", "medium")
-
-                    # Split long messages into multiple lines
-                    max_chars_per_line = 30
-                    words = message.split()
-                    lines = []
-                    current_line = ""
-
-                    for word in words:
-                        test_line = current_line + (" " if current_line else "") + word
-                        if len(test_line) <= max_chars_per_line:
-                            current_line = test_line
-                        else:
-                            if current_line:
-                                lines.append(current_line)
-                            current_line = word
-                    if current_line:
-                        lines.append(current_line)
-
-                    # Limit to 3 lines
-                    if len(lines) > 3:
-                        lines = lines[:3]
-                        lines[-1] = lines[-1][:27] + "..."
-
-                    # Color based on urgency
-                    urgency_colors = {
-                        "low": (200, 200, 255),
-                        "medium": (255, 255, 200),
-                        "high": (255, 150, 150),
-                    }
-                    text_color = urgency_colors.get(urgency, (255, 255, 255))
-
-                    # Background color based on urgency
-                    bg_colors = {
-                        "low": (40, 40, 60, 230),
-                        "medium": (60, 60, 40, 230),
-                        "high": (70, 40, 40, 230),
-                    }
-                    bg_color = bg_colors.get(urgency, (40, 40, 40, 230))
-
-                    # Calculate bubble dimensions
-                    line_height = 18
-                    padding = 8
-                    max_line_width = max(
-                        self.font_small.size(line)[0] for line in lines
-                    )
-                    bubble_width = max_line_width + padding * 2
-                    bubble_height = len(lines) * line_height + padding * 2
-
-                    # Position bubble above agent
-                    bubble_x = screen_x - bubble_width // 2
-                    bubble_y = y_offset - 10
-
-                    # Draw speech bubble background with rounded corners
-                    bubble_rect = pygame.Rect(
-                        bubble_x, bubble_y, bubble_width, bubble_height
-                    )
-                    bubble_surface = pygame.Surface(
-                        (bubble_width, bubble_height), pygame.SRCALPHA
-                    )
-                    pygame.draw.rect(
-                        bubble_surface,
-                        bg_color,
-                        bubble_surface.get_rect(),
-                        border_radius=8,
-                    )
-
-                    # Draw bubble border
-                    border_color = (
-                        min(bg_color[0] + 40, 255),
-                        min(bg_color[1] + 40, 255),
-                        min(bg_color[2] + 40, 255),
-                        255,
-                    )
-                    pygame.draw.rect(
-                        bubble_surface,
-                        border_color,
-                        bubble_surface.get_rect(),
-                        2,
-                        border_radius=8,
-                    )
-
-                    # Draw small triangle pointer
-                    pointer_size = 6
-                    pointer_points = [
-                        (bubble_width // 2 - pointer_size, bubble_height),
-                        (bubble_width // 2 + pointer_size, bubble_height),
-                        (bubble_width // 2, bubble_height + pointer_size),
-                    ]
-                    pygame.draw.polygon(bubble_surface, bg_color, pointer_points)
-                    pygame.draw.lines(
-                        bubble_surface,
-                        border_color,
-                        False,
-                        [pointer_points[0], pointer_points[2], pointer_points[1]],
-                        2,
-                    )
-
-                    self.screen.blit(bubble_surface, bubble_rect)
-
-                    # Render text lines
-                    text_y = bubble_y + padding
-                    for line in lines:
-                        line_text = self.font_small.render(line, True, text_color)
-                        line_rect = line_text.get_rect(
-                            center=(screen_x, text_y + line_height // 2)
-                        )
-                        self.screen.blit(line_text, line_rect)
-                        text_y += line_height
-
-                    # Update y_offset for any additional elements above
-                    y_offset = bubble_y - 5
 
             # Draw vision range (if debug mode)
             if self.show_debug_info:
@@ -776,87 +691,98 @@ class BattleRenderer:
             y_offset += 15
 
     def render_team_communications(self) -> None:
-        """Render team communication messages with urgency-based prioritization."""
+        """Render team communication messages in a dedicated panel at the bottom."""
         if not self.screen or not self.game_state or not self.show_communication:
             return
 
-        # Communication panel (compact size)
-        comm_rect = pygame.Rect(10, self.window_height - 110, 350, 100)
-        pygame.draw.rect(self.screen, self.colors["communication_bg"], comm_rect)
-        pygame.draw.rect(self.screen, self.colors["border"], comm_rect, 2)
+        panel_height = 140
+        panel_y = self.window_height - panel_height
+        comm_rect = pygame.Rect(0, panel_y, self.window_width - 180, panel_height)
 
-        # Title
-        title_surface = self.font_small.render("Comms", True, self.colors["text"])
-        self.screen.blit(title_surface, (15, self.window_height - 105))
+        # Draw main panel background
+        panel_surface = pygame.Surface(comm_rect.size, pygame.SRCALPHA)
+        panel_surface.fill((*self.colors["communication_bg"], 220))
+        self.screen.blit(panel_surface, comm_rect.topleft)
+        pygame.draw.rect(self.screen, self.colors["border"], comm_rect, 1)
 
-        y_offset = self.window_height - 90
+        # Define columns for each team
+        team_a_rect = pygame.Rect(
+            comm_rect.left + 5,
+            comm_rect.top + 5,
+            comm_rect.width / 2 - 10,
+            comm_rect.height - 10,
+        )
+        team_b_rect = pygame.Rect(
+            comm_rect.left + comm_rect.width / 2 + 5,
+            comm_rect.top + 5,
+            comm_rect.width / 2 - 10,
+            comm_rect.height - 10,
+        )
 
-        # Collect and prioritize messages from both teams
-        all_messages = []
-        for team in ["team_a", "team_b"]:
-            # Get prioritized messages for each team (reduced to 3)
-            prioritized_messages = self.game_state.get_prioritized_team_messages(
-                team, 3
-            )
-            for msg in prioritized_messages:
-                all_messages.append((team, msg))
+        # Draw team headers with message counts for debugging
+        font_header = self.font_medium
+        team_a_messages = self.game_state.team_communications.get("team_a", [])
+        team_b_messages = self.game_state.team_communications.get("team_b", [])
 
-        # Sort all messages by urgency (high -> medium -> low) then by timestamp (newest first)
-        urgency_priority = {"high": 3, "medium": 2, "low": 1}
+        team_a_header_text = f"Team A Comms ({len(team_a_messages)})"
+        team_b_header_text = f"Team B Comms ({len(team_b_messages)})"
 
-        def sort_key(item):
-            team, msg = item
-            urgency = getattr(msg, "urgency", "medium")
-            timestamp = getattr(msg, "timestamp", 0.0)
-            return (urgency_priority.get(urgency, 2), timestamp)
+        team_a_header = font_header.render(
+            team_a_header_text, True, TEAM_COLORS["team_a"]
+        )
+        team_b_header = font_header.render(
+            team_b_header_text, True, TEAM_COLORS["team_b"]
+        )
+        self.screen.blit(team_a_header, (team_a_rect.left, team_a_rect.top))
+        self.screen.blit(team_b_header, (team_b_rect.left, team_b_rect.top))
 
-        all_messages.sort(key=sort_key, reverse=True)
+        # Draw messages for each team
+        self._draw_team_messages(team_a_messages, team_a_rect)
+        self._draw_team_messages(team_b_messages, team_b_rect)
 
-        # Display messages (show up to 4 messages)
-        displayed_count = 0
-        for team, msg in all_messages:
-            if displayed_count >= 4:
+    def _draw_team_messages(
+        self, messages: list[TeamCommunication], rect: pygame.Rect
+    ) -> None:
+        """Helper to draw messages for a specific team in a given rect."""
+        if not self.game_state:
+            return
+
+        # Display latest messages at the bottom
+        max_messages = 6
+        latest_messages = sorted(messages, key=lambda m: m.timestamp, reverse=True)[
+            :max_messages
+        ]
+
+        y_offset = rect.top + 25
+        line_height = 15
+
+        for msg in reversed(
+            latest_messages
+        ):  # Draw oldest first so newest is at bottom
+            sender_name = msg.sender_id.split("_")[-1]
+            message_content = msg.message
+
+            # Truncate message to fit
+            max_chars = int(rect.width / (self.font_small.size("A")[0] * 0.8))
+            if len(message_content) > max_chars:
+                message_content = message_content[: max_chars - 3] + "..."
+
+            # Format message
+            display_text = f"{sender_name}: {message_content}"
+
+            # Color based on urgency
+            urgency_colors = {
+                "low": self.colors["text_dim"],
+                "medium": (255, 255, 200),
+                "high": (255, 150, 150),
+            }
+            text_color = urgency_colors.get(msg.urgency, self.colors["text"])
+
+            msg_surface = self.font_small.render(display_text, True, text_color)
+            self.screen.blit(msg_surface, (rect.left, y_offset))
+            y_offset += line_height
+            if y_offset > rect.bottom - line_height:
                 break
-
-            team_color = TEAM_COLORS.get(team, self.colors["text"])
-
-            # Format message with enhanced urgency indicators
-            sender_name = (
-                msg.sender_id.split("_")[-1] if hasattr(msg, "sender_id") else "Unknown"
-            )
-            urgency = getattr(msg, "urgency", "medium")
-            message_content = getattr(msg, "message", str(msg))
-
-            # Urgency indicators and colors
-            if urgency == "high":
-                urgency_indicator = "!!!"
-                urgency_color = self.colors["error"]  # Red for high urgency
-            elif urgency == "medium":
-                urgency_indicator = "!"
-                urgency_color = (255, 255, 0)  # Yellow for medium urgency
-            else:
-                urgency_indicator = ""
-                urgency_color = team_color
-
-            # Truncate message to fit (shorter for compact UI)
-            max_message_length = 30
-            if len(message_content) > max_message_length:
-                message_content = message_content[: max_message_length - 3] + "..."
-
-            # Format final message text (compact format)
-            team_prefix = "A" if team == "team_a" else "B"
-            if urgency_indicator:
-                message_text = f"{team_prefix}{sender_name[-1]}{urgency_indicator}: {message_content}"
-            else:
-                message_text = f"{team_prefix}{sender_name[-1]}: {message_content}"
-
-            # Render message with urgency color for high priority messages
-            display_color = urgency_color if urgency == "high" else team_color
-            msg_surface = self.font_small.render(message_text, True, display_color)
-            self.screen.blit(msg_surface, (15, y_offset))
-
-            y_offset += 14
-            displayed_count += 1
 
     def render_action_feed(self) -> None:
         """Render recent action results feed."""
@@ -1001,8 +927,8 @@ class BattleRenderer:
             # Render UI
             self.render_ui()
 
-            # Render action feed (removed team communications panel)
-            self.render_action_feed()
+            # Render team communications panel
+            self.render_team_communications()
         else:
             # Show loading message
             loading_text = self.font_large.render(

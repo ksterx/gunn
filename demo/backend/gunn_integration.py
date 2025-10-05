@@ -33,7 +33,7 @@ class BattleObservationPolicy(ObservationPolicy):
     """
 
     def __init__(
-        self, team: str, vision_range: float = 30.0, communication_range: float = 50.0
+        self, team: str, vision_range: float = 90.0, communication_range: float = 50.0
     ):
         """Initialize battle observation policy for a specific team.
 

@@ -266,7 +266,7 @@ class GameInitializer:
                     weapon_condition=self.config.initial_weapon_condition,
                     last_action_time=0.0,
                     communication_range=GAME_CONFIG.get("communication_range", 50.0),
-                    vision_range=GAME_CONFIG.get("vision_range", 30.0),
+                    vision_range=GAME_CONFIG.get("vision_range", 90.0),
                     attack_range=GAME_CONFIG.get("attack_range", 15.0),
                 )
 

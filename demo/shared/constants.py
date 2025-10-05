@@ -19,7 +19,7 @@ GAME_CONFIG: dict[str, Any] = {
     # Agent capabilities
     "default_health": 100,
     "communication_range": 50.0,
-    "vision_range": 30.0,
+    "vision_range": 90.0,
     "attack_range": 15.0,
     # Map settings
     "map_width": 200.0,
