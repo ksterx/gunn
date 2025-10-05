@@ -22,7 +22,7 @@ from gunn.core.concurrent_processor import (
 )
 from gunn.core.event_log import EventLog
 from gunn.policies.observation import ObservationPolicy
-from gunn.schemas.messages import WorldState
+from gunn.schemas.messages import View, WorldState
 from gunn.schemas.types import (
     CancelToken,
     Effect,
@@ -39,6 +39,7 @@ from gunn.utils.errors import (
     StaleContextError,
     ValidationError,
 )
+from gunn.utils.hashing import canonical_json
 from gunn.utils.memory import MemoryConfig, MemoryManager
 from gunn.utils.scheduling import WeightedRoundRobinScheduler
 from gunn.utils.telemetry import (
@@ -62,6 +63,22 @@ from gunn.utils.timing import TimedQueue
 
 if TYPE_CHECKING:
     from gunn.core.agent_logic import AsyncAgentLogic
+
+
+def _compute_context_digest(view_data: dict[str, Any]) -> str:
+    """Compute SHA-256 digest of view data for context tracking.
+
+    Args:
+        view_data: Dictionary containing view data to hash
+
+    Returns:
+        Hexadecimal SHA-256 hash string
+    """
+    import hashlib
+
+    # Use canonical JSON for deterministic hashing
+    canonical_bytes = canonical_json(view_data)
+    return hashlib.sha256(canonical_bytes).hexdigest()
 
 
 class EffectValidator(Protocol):
@@ -925,7 +942,7 @@ class AgentHandle:
         """
         return self.view_seq
 
-    async def get_current_observation(self) -> Any:
+    async def get_current_observation(self) -> View:
         """Get current world state view for this agent.
 
         This method provides immediate access to the current world state
@@ -933,7 +950,7 @@ class AgentHandle:
         the current state before deciding on actions.
 
         Returns:
-            Current View of the world state for this agent
+            Current View of the world state for this agent with view_seq
 
         Raises:
             RuntimeError: If agent is not registered
@@ -953,9 +970,36 @@ class AgentHandle:
             tracer_name="gunn.agent_handle",
         ):
             policy = self.orchestrator.observation_policies[self.agent_id]
-            return policy.filter_world_state(
+            # filter_world_state already returns a View object with view_seq=0
+            base_view = policy.filter_world_state(
                 self.orchestrator.world_state, self.agent_id
             )
+
+            # Get current global_seq from orchestrator
+            current_seq = self.orchestrator._global_seq
+
+            # Create updated View with current view_seq
+            # Recompute context digest with current seq for staleness detection
+            view_data = {
+                "agent_id": self.agent_id,
+                "view_seq": current_seq,
+                "visible_entities": base_view.visible_entities,
+                "visible_relationships": base_view.visible_relationships,
+            }
+            context_digest = _compute_context_digest(view_data)
+
+            view = View(
+                agent_id=self.agent_id,
+                view_seq=current_seq,
+                visible_entities=base_view.visible_entities,
+                visible_relationships=base_view.visible_relationships,
+                context_digest=context_digest,
+            )
+
+            # Update agent handle's view_seq to match current observation
+            self.view_seq = current_seq
+
+            return view
 
     async def run_async_loop(self, agent_logic: "AsyncAgentLogic") -> None:
         """Run the asynchronous observe-think-act loop for this agent.

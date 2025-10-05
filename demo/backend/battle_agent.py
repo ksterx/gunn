@@ -83,17 +83,12 @@ class BattleAgent(AsyncAgentLogic):
             else:
                 observation_dict = observation
 
-            # Update current view_seq from observation
-            # First try to get from observation object
+            # Update current view_seq from observation (View object)
+            # AgentHandle.get_current_observation() now returns View with view_seq
             if hasattr(observation, "view_seq"):
                 self.current_view_seq = observation.view_seq
             elif isinstance(observation_dict, dict):
                 self.current_view_seq = observation_dict.get("view_seq", 0)
-
-            # Also sync with agent_handle's view_seq
-            if self.agent_handle and hasattr(self.agent_handle, "view_seq"):
-                # Update agent_handle's view_seq to match observation
-                self.agent_handle.view_seq = self.current_view_seq
 
             logger.debug(
                 f"Agent {self.agent_id} received observation with view_seq={self.current_view_seq}"
@@ -131,8 +126,6 @@ class BattleAgent(AsyncAgentLogic):
                     latest_obs = await self.agent_handle.get_current_observation()
                     if hasattr(latest_obs, "view_seq"):
                         self.current_view_seq = latest_obs.view_seq
-                        # Also update agent_handle's view_seq
-                        self.agent_handle.view_seq = latest_obs.view_seq
                         logger.debug(
                             f"Agent {self.agent_id} updated to latest view_seq={self.current_view_seq} before intent submission"
                         )
@@ -192,8 +185,6 @@ class BattleAgent(AsyncAgentLogic):
                     latest_obs = await self.agent_handle.get_current_observation()
                     if hasattr(latest_obs, "view_seq"):
                         current_seq = latest_obs.view_seq
-                        # Also update agent_handle's view_seq
-                        self.agent_handle.view_seq = latest_obs.view_seq
                         logger.debug(
                             f"Agent {self.agent_id} using latest view_seq={current_seq} for communication"
                         )
