@@ -567,9 +567,11 @@ class BattleEffectValidator:
 
             if attacker and target:
                 # Update payload to match what CombatManager expects
+                # Keep "target_agent_id" field for validation compatibility (Gunn validates twice)
                 transformed_payload = {
                     "attacker_id": agent_id,
                     "target_id": target_agent_id,
+                    "target_agent_id": target_agent_id,  # Keep for 2nd validation
                     "attacker_position": list(attacker.position),
                     "target_position": list(target.position),
                     "reason": original_payload.get("reason", "Attacking enemy"),
