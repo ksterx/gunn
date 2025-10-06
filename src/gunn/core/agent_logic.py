@@ -27,19 +27,34 @@ class AsyncAgentLogic(ABC):
     @abstractmethod
     async def process_observation(
         self, observation: View, agent_id: str
-    ) -> Intent | None:
-        """Process current observation and return intent to execute, or None to wait.
+    ) -> Intent | list[Intent] | None:
+        """Process current observation and return intent(s) to execute, or None to wait.
 
         This method is called by the agent's async loop whenever a new observation
         is available. The implementation should analyze the observation and decide
-        whether to generate an intent (action) or wait for more information.
+        whether to generate intent(s) (actions) or wait for more information.
+
+        **New in v2.0**: Can now return multiple intents for concurrent execution
+        (e.g., physical action + communication).
 
         Args:
             observation: Current view of the world state for this agent
             agent_id: ID of the agent processing this observation
 
         Returns:
-            Intent to execute, or None if no action should be taken
+            - Single Intent to execute
+            - List of Intents to execute concurrently
+            - None if no action should be taken
+
+        Examples:
+            >>> # Single action (backward compatible)
+            >>> return move_intent
+            
+            >>> # Multiple concurrent actions (new feature)
+            >>> return [move_intent, speak_intent]
+            
+            >>> # No action
+            >>> return None
 
         Raises:
             Exception: Implementation-specific errors during processing

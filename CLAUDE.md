@@ -79,7 +79,10 @@ The system operates through a central **Orchestrator** that coordinates all oper
    - Non-blocking per-agent operation queues
 
 3. **Agent Handles**: Per-agent interfaces for observation and intent submission
-   - `submit_intent(intent)`: Submit agent actions for validation
+   - `submit_intent(intent)`: Submit single agent action for validation
+   - `submit_intents(intents, atomic=False)`: Submit multiple intents concurrently (new in v2.0)
+     - `atomic=False`: Allows partial success (default)
+     - `atomic=True`: All-or-nothing submission
    - `next_observation()`: Async iterator for observations
    - `get_view()`: Current world state filtered by ObservationPolicy
 
@@ -173,6 +176,9 @@ The system is designed to meet:
 4. **Event sourcing**: Complete event log enables replay and debugging
 5. **Type safety**: Complete type annotations, strict mypy checking
 6. **Non-blocking**: Per-agent queues prevent cross-agent blocking
+7. **Concurrent actions**: Agents can submit multiple intents simultaneously (v2.0+)
+   - Physical actions (Move, Attack) + Communication (Speak) in same tick
+   - Atomic and non-atomic submission modes for different use cases
 
 ## Code Conventions
 
@@ -217,6 +223,11 @@ Follow Conventional Commits:
 5. **Don't forget staleness checks**: Always validate `context_seq` before processing intents
 6. **Don't use `pip`**: Always use `uv` for dependency management
 7. **Don't put test files in src/**: All tests belong in `tests/` directory, not co-located with source
+8. **Concurrent intents** (v2.0+):
+   - Use `submit_intents()` for multiple actions, not multiple `submit_intent()` calls
+   - Choose `atomic=True` for coordinated actions that must succeed together
+   - Choose `atomic=False` (default) for independent actions like move + speak
+   - `AsyncAgentLogic.process_observation()` can now return `Intent | list[Intent] | None`
 
 ## Demo Applications
 
@@ -231,4 +242,10 @@ Run with: `uv sync --group demo` then start backend and frontend separately.
 
 Located in `schemas/`: JSON schema definitions for intent/effect validation
 - Contract tests in `tests/contract/` ensure schema compliance
-- Use Pydantic models in `src/gunn/schemas/` for runtime validation
+- Core types use TypedDict for performance (3-15x faster than Pydantic)
+- **Optional Pydantic Addon** (`src/gunn/addons/pydantic/`):
+  - Use at API boundaries for type-safe validation
+  - Provides `IntentModel`, `EffectModel`, `EffectDraftModel`, `ObservationDeltaModel`
+  - Zero-copy conversion utilities: `intent_to_dict()`, `intent_from_dict()`, etc.
+  - Example: `from gunn.addons.pydantic import IntentModel, intent_to_dict`
+  - Maintains TypedDict performance internally while providing Pydantic ergonomics at boundaries

@@ -39,6 +39,7 @@ class EffectProcessor:
             "TeamMessage": self._handle_team_message,
             "Speak": self._handle_speak_effect,
             "Move": self._handle_agent_move,
+            "Attack": self._handle_attack_effect,
             "AttackFailed": self._handle_attack_failed,
             "HealFailed": self._handle_heal_failed,
             "RepairFailed": self._handle_repair_failed,
@@ -481,6 +482,60 @@ class EffectProcessor:
 
         self._logger.debug(
             f"Agent {agent_id} moved: {old_position} -> {agent.position}"
+        )
+
+    async def _handle_attack_effect(
+        self, effect: dict[str, Any], world_state: BattleWorldState
+    ) -> None:
+        """
+        Handle Attack effect by processing it through BattleActionProcessor.
+
+        Args:
+            effect: Attack effect
+            world_state: Current world state
+
+        Returns:
+            List of resulting effects (AgentDamaged, AgentDied, etc.)
+        """
+        from .battle_mechanics import CombatManager
+
+        payload = effect.get("payload", {})
+        attacker_id = payload.get("attacker_id")
+        target_id = payload.get("target_id")
+
+        self._logger.info(
+            f"[ATTACK] Processing Attack effect: attacker={attacker_id}, target={target_id}"
+        )
+
+        if not attacker_id or not target_id:
+            self._logger.warning(
+                f"Attack effect missing attacker_id or target_id: {payload}"
+            )
+            return
+
+        # Process attack through battle mechanics
+        combat_manager = CombatManager()
+        resulting_effects = await combat_manager.process_attack(
+            attacker_id, target_id, world_state
+        )
+
+        self._logger.info(
+            f"[ATTACK] Generated {len(resulting_effects)} resulting effects: "
+            f"{[e.get('kind') for e in resulting_effects]}"
+        )
+
+        # Process resulting effects (AgentDamaged, AgentDied, etc.)
+        for resulting_effect in resulting_effects:
+            effect_kind = resulting_effect.get("kind")
+            handler = self._effect_handlers.get(effect_kind)
+            if handler:
+                await handler(resulting_effect, world_state)
+            else:
+                self._logger.warning(f"No handler for effect kind: {effect_kind}")
+
+        self._logger.debug(
+            f"Processed Attack effect: attacker={attacker_id}, target={target_id}, "
+            f"resulting_effects={len(resulting_effects)}"
         )
 
     async def _handle_attack_failed(

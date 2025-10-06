@@ -13,7 +13,7 @@ from typing import Any
 
 from gunn.policies.observation import ObservationPolicy, PolicyConfig
 from gunn.schemas.messages import View, WorldState
-from gunn.schemas.types import Effect
+from gunn.schemas.types import Effect, EffectDraft
 from gunn.utils.hashing import canonical_json
 from gunn.utils.telemetry import get_logger
 
@@ -509,6 +509,78 @@ class BattleEffectValidator:
                 raise ValidationError(intent, [reason])
             return True
 
+        # Handle Move intent
+        if intent_kind == "Move":
+            is_valid, reason = self._validate_move_intent(intent)
+            self.logger.info(
+                f"[VALIDATOR] Move intent validation: valid={is_valid}, reason={reason}, agent={intent.get('agent_id')}"
+            )
+            if not is_valid:
+                from gunn.utils.errors import ValidationError
+
+                raise ValidationError(intent, [reason])
+
+            # Transform payload for Gunn (since Gunn doesn't call intent_to_effect)
+            # Note: We modify intent["payload"] in-place so Gunn uses the transformed version
+            agent_id = intent.get("agent_id", "")
+            original_payload = intent.get("payload", {})
+            target_position = original_payload.get("to")
+
+            agent = self.world_state.agents.get(agent_id)
+            if agent and target_position:
+                # Update payload to match what _handle_agent_move expects
+                # Keep "to" field for validation compatibility (Gunn validates twice)
+                transformed_payload = {
+                    "agent_id": agent_id,
+                    "old_position": list(agent.position),
+                    "new_position": list(target_position[:2]),
+                    "to": list(target_position[:2]),  # Keep for 2nd validation
+                    "reason": original_payload.get("reason", "Moving"),
+                }
+                intent["payload"] = transformed_payload
+                self.logger.info(
+                    f"[VALIDATOR] Transformed Move payload: {original_payload} -> {transformed_payload}"
+                )
+
+            return True
+
+        # Handle Attack intent
+        if intent_kind == "Attack":
+            is_valid, reason = self._validate_attack_intent(intent)
+            self.logger.info(
+                f"[VALIDATOR] Attack intent validation: valid={is_valid}, reason={reason}, agent={intent.get('agent_id')}"
+            )
+            if not is_valid:
+                from gunn.utils.errors import ValidationError
+
+                raise ValidationError(intent, [reason])
+
+            # Transform payload for Gunn (since Gunn doesn't call intent_to_effect)
+            # Gunn will use intent["payload"] directly as effect["payload"]
+            # So we need to transform it here
+            agent_id = intent.get("agent_id", "")
+            original_payload = intent.get("payload", {})
+            target_agent_id = original_payload.get("target_agent_id", "")
+
+            attacker = self.world_state.agents.get(agent_id)
+            target = self.world_state.agents.get(target_agent_id)
+
+            if attacker and target:
+                # Update payload to match what CombatManager expects
+                transformed_payload = {
+                    "attacker_id": agent_id,
+                    "target_id": target_agent_id,
+                    "attacker_position": list(attacker.position),
+                    "target_position": list(target.position),
+                    "reason": original_payload.get("reason", "Attacking enemy"),
+                }
+                intent["payload"] = transformed_payload
+                self.logger.info(
+                    f"[VALIDATOR] Transformed Attack payload: {original_payload} -> {transformed_payload}"
+                )
+
+            return True
+
         # Delegate to default validator for other intents
         return self.default_validator.validate_intent(intent, world_state)
 
@@ -547,17 +619,104 @@ class BattleEffectValidator:
 
         return True, "Valid speak intent"
 
+    def _validate_move_intent(self, intent: dict[str, Any]) -> tuple[bool, str]:
+        """Validate Move intent.
+
+        Args:
+            intent: Move intent to validate
+
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        payload = intent.get("payload", {})
+        agent_id = intent.get("agent_id", "")
+        target_position = payload.get("to")
+
+        # Validate agent exists and is alive
+        agent = self.world_state.agents.get(agent_id)
+        if not agent:
+            return False, f"Agent {agent_id} not found"
+
+        if not agent.is_alive():
+            return False, "Dead agents cannot move"
+
+        # Validate target position format
+        if not target_position:
+            return False, "Target position is required"
+
+        if not isinstance(target_position, (list, tuple)):
+            return False, "Target position must be a list or tuple"
+
+        if len(target_position) < 2:
+            return False, "Target position must have at least 2 coordinates"
+
+        # Validate position values are numbers
+        try:
+            x, y = float(target_position[0]), float(target_position[1])
+        except (ValueError, TypeError):
+            return False, "Target position coordinates must be numbers"
+
+        # Validate position is within bounds (0-200 for demo battlefield)
+        if x < 0 or x > 200 or y < 0 or y > 200:
+            return False, f"Target position ({x}, {y}) out of bounds (0-200)"
+
+        return True, "Valid move intent"
+
+    def _validate_attack_intent(self, intent: dict[str, Any]) -> tuple[bool, str]:
+        """Validate Attack intent.
+
+        Args:
+            intent: Attack intent to validate
+
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        payload = intent.get("payload", {})
+        agent_id = intent.get("agent_id", "")
+        target_agent_id = payload.get("target_agent_id")
+
+        # Validate attacker exists and is alive
+        attacker = self.world_state.agents.get(agent_id)
+        if not attacker:
+            return False, f"Agent {agent_id} not found"
+
+        if not attacker.is_alive():
+            return False, "Dead agents cannot attack"
+
+        # Validate target agent ID is provided
+        if not target_agent_id:
+            return False, "Target agent ID is required"
+
+        # Validate target exists
+        target = self.world_state.agents.get(target_agent_id)
+        if not target:
+            return False, f"Target agent {target_agent_id} not found"
+
+        # Validate target is alive
+        if not target.is_alive():
+            return False, "Cannot attack dead agents"
+
+        # Validate not attacking self
+        if agent_id == target_agent_id:
+            return False, "Cannot attack self"
+
+        # Validate attacking different team
+        if attacker.team == target.team:
+            return False, "Cannot attack teammates"
+
+        return True, "Valid attack intent"
+
     def intent_to_effect(
         self, intent: dict[str, Any], world_state: WorldState
-    ) -> Effect:
-        """Convert validated intent to effect.
+    ) -> EffectDraft:
+        """Convert validated intent to effect draft.
 
         Args:
             intent: Validated intent
             world_state: Current world state from Gunn
 
         Returns:
-            Effect to apply
+            EffectDraft to be completed by Orchestrator
         """
         intent_kind = intent.get("kind", "")
 
@@ -565,18 +724,26 @@ class BattleEffectValidator:
         if intent_kind == "Speak":
             return self._speak_to_team_message(intent)
 
+        # Handle Move intent
+        if intent_kind == "Move":
+            return self._move_to_effect(intent)
+
+        # Handle Attack intent
+        if intent_kind == "Attack":
+            return self._attack_to_effect(intent)
+
         # Delegate to default validator for other intents (this will raise NotImplementedError)
         # For now, we don't convert other intents to effects in the validator
         raise NotImplementedError(f"intent_to_effect not implemented for {intent_kind}")
 
-    def _speak_to_team_message(self, intent: dict[str, Any]) -> Effect:
-        """Convert Speak intent to TeamMessage effect.
+    def _speak_to_team_message(self, intent: dict[str, Any]) -> EffectDraft:
+        """Convert Speak intent to TeamMessage effect draft.
 
         Args:
             intent: Speak intent
 
         Returns:
-            TeamMessage effect
+            TeamMessage effect draft
         """
         payload = intent.get("payload", {})
         agent_id = intent.get("agent_id", "")
@@ -585,21 +752,98 @@ class BattleEffectValidator:
         if not agent:
             raise ValueError(f"Agent {agent_id} not found")
 
-        effect = Effect(
-            kind="TeamMessage",
-            payload={
+        effect: EffectDraft = {
+            "kind": "TeamMessage",
+            "payload": {
                 "sender_id": agent_id,
                 "sender_team": agent.team,
                 "message": payload.get("message", ""),
                 "urgency": payload.get("urgency", "medium"),
                 "timestamp": self.world_state.game_time,
             },
-            source_id=agent_id,
-            priority=0,
-        )
+            "source_id": agent_id,
+            "schema_version": "1.0.0",
+        }
 
         self.logger.info(
             f"[VALIDATOR] Created TeamMessage effect: agent={agent_id}, team={agent.team}, message={payload.get('message', '')[:50]}"
+        )
+        return effect
+
+    def _move_to_effect(self, intent: dict[str, Any]) -> EffectDraft:
+        """Convert Move intent to Move effect draft.
+
+        Args:
+            intent: Move intent
+
+        Returns:
+            Move effect draft
+        """
+        payload = intent.get("payload", {})
+        agent_id = intent.get("agent_id", "")
+        agent = self.world_state.agents.get(agent_id)
+
+        if not agent:
+            raise ValueError(f"Agent {agent_id} not found")
+
+        # Get target position from payload
+        target_position = payload.get("to")
+        if not target_position or len(target_position) < 2:
+            raise ValueError(f"Invalid target position: {target_position}")
+
+        effect: EffectDraft = {
+            "kind": "Move",
+            "payload": {
+                "agent_id": agent_id,
+                "old_position": list(agent.position),
+                "new_position": list(target_position[:2]),  # Ensure 2D
+                "reason": payload.get("reason", "Moving"),
+            },
+            "source_id": agent_id,
+            "schema_version": "1.0.0",
+        }
+
+        self.logger.info(
+            f"[VALIDATOR] Created Move effect: agent={agent_id}, from={agent.position} to={target_position[:2]}"
+        )
+        return effect
+
+    def _attack_to_effect(self, intent: dict[str, Any]) -> EffectDraft:
+        """Convert Attack intent to Attack effect draft.
+
+        Args:
+            intent: Attack intent
+
+        Returns:
+            Attack effect draft
+        """
+        payload = intent.get("payload", {})
+        agent_id = intent.get("agent_id", "")
+        target_agent_id = payload.get("target_agent_id", "")
+
+        attacker = self.world_state.agents.get(agent_id)
+        if not attacker:
+            raise ValueError(f"Agent {agent_id} not found")
+
+        target = self.world_state.agents.get(target_agent_id)
+        if not target:
+            raise ValueError(f"Target agent {target_agent_id} not found")
+
+        effect: EffectDraft = {
+            "kind": "Attack",
+            "payload": {
+                "attacker_id": agent_id,
+                "target_id": target_agent_id,
+                "attacker_position": list(attacker.position),
+                "target_position": list(target.position),
+                "reason": payload.get("reason", "Attacking enemy"),
+            },
+            "source_id": agent_id,
+            "schema_version": "1.0.0",
+        }
+
+        self.logger.info(
+            f"[VALIDATOR] Created Attack effect: attacker={agent_id}, target={target_agent_id}"
         )
         return effect
 

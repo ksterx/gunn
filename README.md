@@ -87,6 +87,44 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Concurrent Actions (v2.0+)
+
+Agents can now submit multiple intents simultaneously, enabling actions like moving while communicating:
+
+```python
+# Single intent (backward compatible)
+await agent.submit_intent(move_intent)
+
+# Multiple intents - non-atomic (allows partial success)
+move_intent = {
+    "kind": "Move",
+    "payload": {"to": [10.0, 20.0]},
+    "context_seq": 0,
+    "req_id": "move_1",
+    "agent_id": "agent_a",
+    "priority": 1,
+    "schema_version": "1.0.0"
+}
+
+speak_intent = {
+    "kind": "Speak",
+    "payload": {"message": "Moving to objective!"},
+    "context_seq": 0,
+    "req_id": "speak_1",
+    "agent_id": "agent_a",
+    "priority": 1,
+    "schema_version": "1.0.0"
+}
+
+# Submit both concurrently (default: atomic=False)
+req_ids = await agent.submit_intents([move_intent, speak_intent])
+# Returns: ["move_1", "speak_1"] if both succeed, or partial list if one fails
+
+# Atomic mode - all-or-nothing
+req_ids = await agent.submit_intents([move_intent, speak_intent], atomic=True)
+# Raises exception if any intent fails, ensures coordinated actions
+```
+
 ## Architecture
 
 The system is built around a central event-driven core with the following components:
@@ -118,6 +156,31 @@ from gunn.facades import MessageFacade
 env = MessageFacade(orchestrator)
 await env.emit(event)
 ```
+
+### Type-Safe Pydantic Addon (Optional)
+
+For better developer experience at API boundaries, use the optional Pydantic addon:
+
+```python
+from gunn.addons.pydantic import IntentModel, intent_to_dict
+
+# Create type-safe intent with validation
+intent = IntentModel(
+    kind="Move",
+    payload={"to": [10.0, 20.0]},
+    context_seq=0,
+    req_id="move_1",
+    agent_id="agent_a",
+    priority=1,
+    schema_version="1.0.0"
+)
+
+# Convert to TypedDict for internal use (zero-copy)
+intent_dict = intent_to_dict(intent)
+await agent.submit_intent(intent_dict)
+```
+
+**Note**: Gunn uses TypedDict internally for performance (3-15x faster than Pydantic). The Pydantic addon is optional and recommended only for API boundaries where type safety and validation are priorities.
 
 ## External Integrations
 

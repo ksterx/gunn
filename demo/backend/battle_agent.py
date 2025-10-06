@@ -58,19 +58,20 @@ class BattleAgent(AsyncAgentLogic):
 
     async def process_observation(
         self, observation: dict[str, Any], agent_id: str
-    ) -> dict[str, Any] | None:
-        """Process observation and generate action decision.
+    ) -> dict[str, Any] | list[dict[str, Any]] | None:
+        """Process observation and generate action decision with concurrent intents.
 
-        This method is called by the async agent loop whenever new observations
-        are available. It uses the AI decision maker to generate strategic
-        decisions based on the current battlefield situation.
+        This method now supports returning multiple intents for concurrent execution,
+        allowing agents to perform physical actions and communicate simultaneously.
 
         Args:
             observation: Current observation from the orchestrator
             agent_id: ID of the agent processing the observation
 
         Returns:
-            Intent dict to submit, or None to wait
+            - Single intent dict for single action (backward compatible)
+            - List of intent dicts for concurrent actions (e.g., move + speak)
+            - None to wait without taking action
         """
         try:
             self.observations_processed += 1
@@ -134,15 +135,34 @@ class BattleAgent(AsyncAgentLogic):
                         f"Failed to get latest observation for {self.agent_id}: {e}"
                     )
 
-            # Convert decision to intent with current view_seq
-            primary_intent = self._decision_to_intent(decision)
+            # Convert decision to intent(s) - NEW: Support concurrent actions
+            intents = []
 
-            # For debugging, return only the primary action to see if it executes.
-            # Communication is temporarily disabled.
-            logger.debug(
-                f"Agent {self.agent_id} returning single primary intent for debugging."
-            )
-            return primary_intent
+            # Primary action intent
+            primary_intent = self._action_to_intent(decision.primary_action)
+            if primary_intent:
+                intents.append(primary_intent)
+
+            # Communication intent (if present)
+            if decision.communication:
+                comm_intent = self._communication_to_intent(decision.communication)
+                if comm_intent:
+                    intents.append(comm_intent)
+
+            # Return based on number of intents
+            if len(intents) == 0:
+                return None
+            elif len(intents) == 1:
+                logger.debug(
+                    f"Agent {self.agent_id} returning single intent: {intents[0]['kind']}"
+                )
+                return intents[0]
+            else:
+                logger.info(
+                    f"Agent {self.agent_id} returning {len(intents)} concurrent intents: "
+                    f"{[i['kind'] for i in intents]}"
+                )
+                return intents
 
         except Exception as e:
             logger.error(f"Error processing observation for {self.agent_id}: {e}")
@@ -169,10 +189,17 @@ class BattleAgent(AsyncAgentLogic):
             "strategy": "coordinate with teammates and eliminate enemies",
         }
 
-    def _create_communication_intent(
+    def _communication_to_intent(
         self, communication: "CommunicateAction"
     ) -> dict[str, Any] | None:
-        """Create a communication intent dictionary."""
+        """Create a communication intent dictionary from CommunicateAction.
+
+        Args:
+            communication: CommunicateAction from AI decision
+
+        Returns:
+            Intent dict for Speak action, or None if creation fails
+        """
         import time
         import uuid
 
@@ -202,14 +229,14 @@ class BattleAgent(AsyncAgentLogic):
             )
             return None
 
-    def _decision_to_intent(self, decision: AgentDecision) -> dict[str, Any]:
-        """Convert AI decision to Gunn intent.
+    def _action_to_intent(self, action) -> dict[str, Any] | None:
+        """Convert primary action to Gunn intent.
 
         Args:
-            decision: AI-generated decision
+            action: Primary action (MoveAction, AttackAction, etc.)
 
         Returns:
-            Intent dictionary for submission to orchestrator
+            Intent dictionary for submission to orchestrator, or None if invalid
         """
         import time
         import uuid
@@ -221,55 +248,54 @@ class BattleAgent(AsyncAgentLogic):
             RepairAction,
         )
 
-        action = decision.primary_action
         timestamp = time.time()
         base_req_id = f"{self.agent_id}_{timestamp}"
 
         # Create primary action intent with current view_seq
         if isinstance(action, MoveAction):
-            intent = {
+            return {
                 "kind": "Move",
                 "payload": {
                     "to": action.target_position,  # Gunn expects 'to' field
                     "reason": action.reason,
                 },
-                "context_seq": self.current_view_seq,  # Use current view_seq
+                "context_seq": self.current_view_seq,
                 "req_id": f"{base_req_id}_move_{uuid.uuid4().hex[:8]}",
                 "agent_id": self.agent_id,
                 "priority": 0,
                 "schema_version": "1.0.0",
             }
         elif isinstance(action, AttackAction):
-            intent = {
+            return {
                 "kind": "Attack",
                 "payload": {
                     "target_agent_id": action.target_agent_id,
                     "reason": action.reason,
                 },
-                "context_seq": self.current_view_seq,  # Use current view_seq
+                "context_seq": self.current_view_seq,
                 "req_id": f"{base_req_id}_attack_{uuid.uuid4().hex[:8]}",
                 "agent_id": self.agent_id,
                 "priority": 1,
                 "schema_version": "1.0.0",
             }
         elif isinstance(action, HealAction):
-            intent = {
+            return {
                 "kind": "Heal",
                 "payload": {
                     "target_agent_id": action.target_agent_id or self.agent_id,
                     "reason": action.reason,
                 },
-                "context_seq": self.current_view_seq,  # Use current view_seq
+                "context_seq": self.current_view_seq,
                 "req_id": f"{base_req_id}_heal_{uuid.uuid4().hex[:8]}",
                 "agent_id": self.agent_id,
                 "priority": 0,
                 "schema_version": "1.0.0",
             }
         elif isinstance(action, RepairAction):
-            intent = {
+            return {
                 "kind": "Repair",
                 "payload": {"reason": action.reason},
-                "context_seq": self.current_view_seq,  # Use current view_seq
+                "context_seq": self.current_view_seq,
                 "req_id": f"{base_req_id}_repair_{uuid.uuid4().hex[:8]}",
                 "agent_id": self.agent_id,
                 "priority": 0,
@@ -278,10 +304,6 @@ class BattleAgent(AsyncAgentLogic):
         else:
             logger.warning(f"Unknown action type: {type(action)}")
             return None
-
-        # Note: Communication is handled separately if needed
-        # For now, focusing on primary action only
-        return intent
 
     async def on_loop_start(self, agent_id: str) -> None:
         """Called when agent loop starts.

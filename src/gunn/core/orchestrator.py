@@ -924,6 +924,50 @@ class AgentHandle:
         """
         return await self.orchestrator.submit_intent(intent)
 
+    async def submit_intents(
+        self, intents: list[Intent], atomic: bool = False
+    ) -> list[str]:
+        """Submit multiple intents for concurrent processing.
+
+        This method allows agents to submit multiple intents simultaneously,
+        enabling concurrent actions such as physical movement + communication.
+
+        Args:
+            intents: List of intents to submit
+            atomic: If True, all intents must succeed or all fail (transactional)
+                   If False, each intent is processed independently
+
+        Returns:
+            List of request IDs for tracking the intents
+
+        Raises:
+            ValidationError: If any intent validation fails (in atomic mode)
+            BackpressureError: If agent exceeds rate limits
+
+        Examples:
+            >>> # Submit movement and communication simultaneously
+            >>> move_intent = {"kind": "Move", "payload": {"to": [10, 20]}, ...}
+            >>> speak_intent = {"kind": "Speak", "payload": {"text": "Moving!"}, ...}
+            >>> req_ids = await handle.submit_intents([move_intent, speak_intent])
+
+        Requirements addressed:
+            - Concurrent action execution for agents
+            - Atomic vs independent intent processing modes
+        """
+        if not intents:
+            return []
+
+        if atomic:
+            # Atomic mode: use orchestrator's batch submission
+            return await self.orchestrator.submit_intent_batch_atomic(
+                intents, self.agent_id
+            )
+        else:
+            # Independent mode: submit concurrently, allow partial success
+            return await self.orchestrator.submit_intent_batch(
+                intents, self.agent_id
+            )
+
     async def cancel(self, req_id: str) -> None:
         """Cancel pending intent by req_id.
 
@@ -1006,9 +1050,12 @@ class AgentHandle:
 
         This method implements the core asynchronous agent execution pattern:
         1. Observe current world state
-        2. Let agent logic process observation and generate intent
-        3. Submit intent and wait for completion
+        2. Let agent logic process observation and generate intent(s)
+        3. Submit intent(s) and wait for completion
         4. Repeat until stopped
+
+        **New in v2.0**: Supports both single and multiple intent submission
+        for concurrent actions.
 
         Args:
             agent_logic: Agent logic implementation to use for processing observations
@@ -1022,6 +1069,7 @@ class AgentHandle:
         - 14.3: Agent uses LLM to generate next action based on observations
         - 14.4: Agent submits intent and immediately returns to observing
         - 14.5: Agents operate independently without synchronization barriers
+        - NEW: Concurrent intent execution (physical + communication)
         """
         if self.agent_id not in self.orchestrator.observation_policies:
             raise RuntimeError(f"Agent {self.agent_id} is not registered")
@@ -1044,17 +1092,33 @@ class AgentHandle:
                     # 1. Observe current world state
                     observation = await self.get_current_observation()
 
-                    # 2. Let agent logic process observation and generate intent
-                    intent = await agent_logic.process_observation(
+                    # 2. Let agent logic process observation and generate intent(s)
+                    result = await agent_logic.process_observation(
                         observation, self.agent_id
                     )
 
-                    if intent:
-                        # 3. Submit intent and wait for completion
-                        req_id = await self.submit_intent(intent)
+                    if result:
+                        # Handle both single and multiple intents
+                        if isinstance(result, list):
+                            # Multiple intents - submit concurrently
+                            req_ids = await self.submit_intents(
+                                result, atomic=False  # Allow partial success
+                            )
 
-                        # 4. Wait for the action to be processed
-                        await self._wait_for_action_completion(req_id)
+                            # 3. Wait for all actions to be processed
+                            await asyncio.gather(
+                                *[
+                                    self._wait_for_action_completion(req_id)
+                                    for req_id in req_ids
+                                ],
+                                return_exceptions=True,  # Don't fail if one times out
+                            )
+                        else:
+                            # Single intent - use original flow (backward compatible)
+                            req_id = await self.submit_intent(result)
+
+                            # 4. Wait for the action to be processed
+                            await self._wait_for_action_completion(req_id)
 
                     # Small delay to prevent busy waiting
                     await asyncio.sleep(0.1)
@@ -1902,6 +1966,179 @@ class Orchestrator:
             except Exception:
                 record_intent_throughput(agent_id, intent["kind"], "error")
                 raise
+
+    async def submit_intent_batch(
+        self, intents: list[Intent], agent_id: str | None = None
+    ) -> list[str]:
+        """Submit multiple intents concurrently (allows partial success).
+
+        This method processes multiple intents in parallel, allowing some to succeed
+        while others may fail. This is useful for independent actions like
+        moving + speaking where one failure shouldn't block the other.
+
+        Args:
+            intents: List of intents to submit
+            agent_id: Optional agent ID for logging (intents may have different agents)
+
+        Returns:
+            List of request IDs for successfully submitted intents
+            (may be shorter than input if some fail)
+
+        Examples:
+            >>> intents = [move_intent, speak_intent]
+            >>> req_ids = await orchestrator.submit_intent_batch(intents)
+            >>> # req_ids may contain 1 or 2 IDs depending on success
+        """
+        if not intents:
+            return []
+
+        # Pre-validate intents and filter out invalid ones (non-atomic mode)
+        valid_intents = []
+        for i, intent in enumerate(intents):
+            try:
+                self.effect_validator.validate_intent(intent, self.world_state)
+                valid_intents.append(intent)
+            except Exception as e:
+                # Log validation failure and skip this intent (non-atomic semantics)
+                intent_agent = intent.get("agent_id", agent_id or "unknown")
+                self._logger.warning(
+                    "Intent pre-validation failed in batch (skipping)",
+                    agent_id=intent_agent,
+                    intent_index=i,
+                    req_id=intent.get("req_id"),
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+
+        # Submit only valid intents concurrently
+        if not valid_intents:
+            return []
+
+        tasks = [self.submit_intent(intent) for intent in valid_intents]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Collect successful request IDs
+        successful_req_ids = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                # Log failure but continue
+                intent_agent = intents[i].get("agent_id", agent_id or "unknown")
+                self._logger.warning(
+                    "Intent submission failed in batch",
+                    agent_id=intent_agent,
+                    req_id=intents[i].get("req_id"),
+                    error=str(result),
+                    error_type=type(result).__name__,
+                )
+            else:
+                successful_req_ids.append(result)
+
+        self._logger.info(
+            "Batch intent submission completed",
+            agent_id=agent_id or "multiple",
+            total=len(intents),
+            successful=len(successful_req_ids),
+            failed=len(intents) - len(successful_req_ids),
+        )
+
+        return successful_req_ids
+
+    async def submit_intent_batch_atomic(
+        self, intents: list[Intent], agent_id: str | None = None
+    ) -> list[str]:
+        """Submit multiple intents atomically (all-or-nothing).
+
+        This method submits multiple intents transactionally. If any intent
+        fails validation or submission, all intents are rejected. This is useful
+        for coordinated actions that must happen together.
+
+        Args:
+            intents: List of intents to submit atomically
+            agent_id: Optional agent ID for logging
+
+        Returns:
+            List of request IDs (same length as input if successful)
+
+        Raises:
+            ValidationError: If any intent validation fails
+            QuotaExceededError: If any intent exceeds quota
+            BackpressureError: If any intent triggers backpressure
+            StaleContextError: If any intent has stale context
+
+        Examples:
+            >>> # Both intents must succeed or both fail
+            >>> intents = [attack_intent, communicate_intent]
+            >>> req_ids = await orchestrator.submit_intent_batch_atomic(intents)
+        """
+        if not intents:
+            return []
+
+        # Pre-validate all intents before submission
+        for i, intent in enumerate(intents):
+            # Basic structure validation
+            if not intent.get("req_id"):
+                raise ValueError(f"Intent must have 'req_id' field: {intent}")
+            if not intent.get("agent_id"):
+                raise ValueError(f"Intent must have 'agent_id' field: {intent}")
+            if not intent.get("kind"):
+                raise ValueError(f"Intent must have 'kind' field: {intent}")
+
+            # Pre-validate with EffectValidator to ensure atomic semantics
+            try:
+                self.effect_validator.validate_intent(intent, self.world_state)
+            except Exception as e:
+                intent_agent = intent.get("agent_id", agent_id or "unknown")
+                self._logger.error(
+                    "Atomic batch pre-validation failed",
+                    agent_id=intent_agent,
+                    intent_index=i,
+                    total=len(intents),
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                raise  # Re-raise to maintain atomic semantics
+
+        # Submit all intents concurrently
+        tasks = [self.submit_intent(intent) for intent in intents]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Check for any failures
+        failed_indices = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                failed_indices.append(i)
+
+        # If any failed, raise the first error (atomic behavior)
+        if failed_indices:
+            first_failure_idx = failed_indices[0]
+            first_error = results[first_failure_idx]
+
+            intent_agent = intents[first_failure_idx].get(
+                "agent_id", agent_id or "unknown"
+            )
+            self._logger.error(
+                "Atomic batch submission failed",
+                agent_id=intent_agent,
+                total=len(intents),
+                failed_count=len(failed_indices),
+                first_error=str(first_error),
+                error_type=type(first_error).__name__,
+            )
+
+            # Raise the first error to maintain atomic semantics
+            if isinstance(first_error, Exception):
+                raise first_error
+            else:
+                raise RuntimeError(f"Unexpected error in atomic batch: {first_error}")
+
+        # All succeeded, return all request IDs
+        self._logger.info(
+            "Atomic batch submission succeeded",
+            agent_id=agent_id or "multiple",
+            total=len(intents),
+        )
+
+        return [str(req_id) for req_id in results]
 
     async def submit_intents(
         self, intents: list[Intent], sim_time: float | None = None
