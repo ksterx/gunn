@@ -583,6 +583,90 @@ class BattleEffectValidator:
 
             return True
 
+        # Handle Heal intent
+        if intent_kind == "Heal":
+            is_valid, reason = self._validate_heal_intent(intent)
+            self.logger.info(
+                f"[VALIDATOR] Heal intent validation: valid={is_valid}, reason={reason}, agent={intent.get('agent_id')}"
+            )
+            if not is_valid:
+                from gunn.utils.errors import ValidationError
+
+                raise ValidationError(intent, [reason])
+
+            # Transform payload for Gunn
+            agent_id = intent.get("agent_id", "")
+            original_payload = intent.get("payload", {})
+            target_agent_id = original_payload.get("target_agent_id", "")
+
+            target = self.world_state.agents.get(target_agent_id)
+            if target:
+                # Keep target_agent_id for 2nd validation
+                transformed_payload = {
+                    "target_id": target_agent_id,
+                    "target_agent_id": target_agent_id,  # Keep for 2nd validation
+                    "new_health": min(100, target.health + 20),  # Heal 20 HP
+                    "heal_amount": 20,
+                    "reason": original_payload.get("reason", "Healing teammate"),
+                }
+                intent["payload"] = transformed_payload
+                self.logger.info(
+                    f"[VALIDATOR] Transformed Heal payload: {original_payload} -> {transformed_payload}"
+                )
+
+            return True
+
+        # Handle Repair intent
+        if intent_kind == "Repair":
+            is_valid, reason = self._validate_repair_intent(intent)
+            self.logger.info(
+                f"[VALIDATOR] Repair intent validation: valid={is_valid}, reason={reason}, agent={intent.get('agent_id')}"
+            )
+            if not is_valid:
+                from gunn.utils.errors import ValidationError
+
+                raise ValidationError(intent, [reason])
+
+            # Transform payload for Gunn
+            agent_id = intent.get("agent_id", "")
+            original_payload = intent.get("payload", {})
+
+            agent = self.world_state.agents.get(agent_id)
+            if agent:
+                # Improve weapon condition by one level
+                from demo.shared.enums import WeaponCondition
+                current_condition = agent.weapon_condition
+                condition_order = [
+                    WeaponCondition.BROKEN,
+                    WeaponCondition.POOR,
+                    WeaponCondition.FAIR,
+                    WeaponCondition.GOOD,
+                    WeaponCondition.EXCELLENT,
+                ]
+                current_idx = condition_order.index(current_condition)
+                new_idx = min(len(condition_order) - 1, current_idx + 1)
+                new_condition = condition_order[new_idx]
+
+                transformed_payload = {
+                    "agent_id": agent_id,
+                    "new_condition": new_condition.value,
+                    "old_condition": current_condition.value,
+                    "reason": original_payload.get("reason", "Repairing weapon"),
+                }
+                intent["payload"] = transformed_payload
+                self.logger.info(
+                    f"[VALIDATOR] Transformed Repair payload: {original_payload} -> {transformed_payload}"
+                )
+
+            return True
+
+        # Handle Interact intent (allow it but don't transform)
+        if intent_kind == "Interact":
+            self.logger.info(
+                f"[VALIDATOR] Interact intent validation: valid=True, agent={intent.get('agent_id')}"
+            )
+            return True
+
         # Delegate to default validator for other intents
         return self.default_validator.validate_intent(intent, world_state)
 
@@ -707,6 +791,78 @@ class BattleEffectValidator:
             return False, "Cannot attack teammates"
 
         return True, "Valid attack intent"
+
+    def _validate_heal_intent(self, intent: dict[str, Any]) -> tuple[bool, str]:
+        """Validate Heal intent.
+
+        Args:
+            intent: Heal intent to validate
+
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        payload = intent.get("payload", {})
+        agent_id = intent.get("agent_id", "")
+        target_agent_id = payload.get("target_agent_id")
+
+        # Validate healer exists and is alive
+        healer = self.world_state.agents.get(agent_id)
+        if not healer:
+            return False, f"Agent {agent_id} not found"
+
+        if not healer.is_alive():
+            return False, "Dead agents cannot heal"
+
+        # Validate target agent ID is provided
+        if not target_agent_id:
+            return False, "Target agent ID is required"
+
+        # Validate target exists
+        target = self.world_state.agents.get(target_agent_id)
+        if not target:
+            return False, f"Target agent {target_agent_id} not found"
+
+        # Validate target is alive
+        if not target.is_alive():
+            return False, "Cannot heal dead agents"
+
+        # Validate healing same team
+        if healer.team != target.team:
+            return False, "Can only heal teammates"
+
+        # Validate target needs healing
+        if target.health >= 100:
+            return False, "Target is already at full health"
+
+        return True, "Valid heal intent"
+
+    def _validate_repair_intent(self, intent: dict[str, Any]) -> tuple[bool, str]:
+        """Validate Repair intent.
+
+        Args:
+            intent: Repair intent to validate
+
+        Returns:
+            Tuple of (is_valid, reason)
+        """
+        payload = intent.get("payload", {})
+        agent_id = intent.get("agent_id", "")
+
+        # Validate agent exists and is alive
+        agent = self.world_state.agents.get(agent_id)
+        if not agent:
+            return False, f"Agent {agent_id} not found"
+
+        if not agent.is_alive():
+            return False, "Dead agents cannot repair weapons"
+
+        # Validate weapon needs repair
+        from demo.shared.enums import WeaponCondition
+
+        if agent.weapon_condition == WeaponCondition.EXCELLENT:
+            return False, "Weapon is already in excellent condition"
+
+        return True, "Valid repair intent"
 
     def intent_to_effect(
         self, intent: dict[str, Any], world_state: WorldState
