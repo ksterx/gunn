@@ -135,13 +135,14 @@ class BattleAgent(AsyncAgentLogic):
                     )
 
             # Convert decision to intent with current view_seq
-            intent = self._decision_to_intent(decision)
+            primary_intent = self._decision_to_intent(decision)
 
-            # Handle communication separately if present (as background task)
-            if decision.communication and self.agent_handle:
-                asyncio.create_task(self._send_communication(decision.communication))
-
-            return intent
+            # For debugging, return only the primary action to see if it executes.
+            # Communication is temporarily disabled.
+            logger.debug(
+                f"Agent {self.agent_id} returning single primary intent for debugging."
+            )
+            return primary_intent
 
         except Exception as e:
             logger.error(f"Error processing observation for {self.agent_id}: {e}")
@@ -168,32 +169,16 @@ class BattleAgent(AsyncAgentLogic):
             "strategy": "coordinate with teammates and eliminate enemies",
         }
 
-    async def _send_communication(self, communication: "CommunicateAction") -> None:
-        """Send team communication through orchestrator.
-
-        Args:
-            communication: Communication action from AI decision
-        """
+    def _create_communication_intent(
+        self, communication: "CommunicateAction"
+    ) -> dict[str, Any] | None:
+        """Create a communication intent dictionary."""
         import time
         import uuid
 
         try:
-            # Get latest observation to get most up-to-date view_seq
             current_seq = self.current_view_seq
-            if self.agent_handle:
-                try:
-                    latest_obs = await self.agent_handle.get_current_observation()
-                    if hasattr(latest_obs, "view_seq"):
-                        current_seq = latest_obs.view_seq
-                        logger.debug(
-                            f"Agent {self.agent_id} using latest view_seq={current_seq} for communication"
-                        )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to get latest observation for communication: {e}"
-                    )
 
-            # Create communication intent
             intent = {
                 "kind": "Speak",
                 "payload": {
@@ -206,20 +191,16 @@ class BattleAgent(AsyncAgentLogic):
                 "priority": 0,
                 "schema_version": "1.0.0",
             }
-
             logger.info(
-                f"Agent {self.agent_id} sending message: {communication.message[:50]}..."
+                f"Agent {self.agent_id} creating communication intent: {communication.message[:50]}..."
             )
-
-            # Submit intent through agent handle
-            if self.agent_handle:
-                await self.agent_handle.submit_intent(intent)
-                logger.debug(f"Communication intent submitted for {self.agent_id}")
-            else:
-                logger.warning(f"No agent handle available for {self.agent_id}")
+            return intent
 
         except Exception as e:
-            logger.warning(f"Failed to send communication for {self.agent_id}: {e}")
+            logger.warning(
+                f"Failed to create communication intent for {self.agent_id}: {e}"
+            )
+            return None
 
     def _decision_to_intent(self, decision: AgentDecision) -> dict[str, Any]:
         """Convert AI decision to Gunn intent.
