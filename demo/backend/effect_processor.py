@@ -137,6 +137,7 @@ class EffectProcessor:
             # Map effect kinds to action types and extract details
             action_mapping = {
                 "Move": ("move", True, ""),
+                "Attack": ("attack", True, "attacking"),
                 "AgentDamaged": ("attack", True, f"-{payload.get('damage', 0)}HP"),
                 "AgentDied": ("kill", True, "eliminated"),
                 "AgentHealed": ("heal", True, f"+{payload.get('heal_amount', 0)}HP"),
