@@ -5,6 +5,7 @@ This module handles combat calculations, weapon degradation, healing mechanics,
 and other game rules for the multi-agent battle simulation.
 """
 
+import logging
 import random
 from typing import Any
 
@@ -12,6 +13,8 @@ from ..shared.constants import GAME_CONFIG
 from ..shared.enums import AgentStatus, WeaponCondition
 from ..shared.models import Agent, BattleWorldState, MapLocation
 from ..shared.utils import calculate_distance
+
+logger = logging.getLogger(__name__)
 
 
 class BattleMechanics:
@@ -68,13 +71,13 @@ class BattleMechanics:
 
     def degrade_weapon(self, agent: Agent) -> WeaponCondition:
         """
-        Degrade weapon condition after use.
+        Calculate degraded weapon condition after use (doesn't modify agent).
 
         Args:
-            agent: The agent whose weapon to degrade
+            agent: The agent whose weapon to check
 
         Returns:
-            New weapon condition
+            New weapon condition (or current if no degradation)
         """
         conditions = [
             WeaponCondition.EXCELLENT,
@@ -86,7 +89,7 @@ class BattleMechanics:
 
         if random.random() < self.weapon_degradation_rate:
             new_index = min(current_index + 1, len(conditions) - 1)
-            agent.weapon_condition = conditions[new_index]
+            return conditions[new_index]
 
         return agent.weapon_condition
 
@@ -312,11 +315,19 @@ class CombatManager:
         distance = calculate_distance(attacker.position, target.position)
         damage = self.mechanics.calculate_attack_damage(attacker, target, distance)
 
+        logger.info(
+            f"[ATTACK] {attacker_id} -> {target_id}: distance={distance:.1f}, "
+            f"damage={damage}, target_health={target.health}"
+        )
+
         if damage > 0:
-            # Apply damage
+            # Calculate damage (don't apply yet - let effect handler do it)
             old_health = target.health
             new_health = max(0, target.health - damage)
-            target.health = new_health
+
+            logger.info(
+                f"[ATTACK] Damage calculation: {old_health} - {damage} = {new_health}"
+            )
 
             effects.append(
                 {
@@ -336,9 +347,8 @@ class CombatManager:
                 }
             )
 
-            # Check if target died
+            # Check if target will die (add AgentDied effect)
             if new_health == 0:
-                target.status = AgentStatus.DEAD
                 effects.append(
                     {
                         "kind": "AgentDied",

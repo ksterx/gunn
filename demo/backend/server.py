@@ -37,7 +37,28 @@ from .gunn_integration import BattleOrchestrator
 from .performance_monitor import performance_monitor
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+numeric_level = getattr(logging, log_level, logging.INFO)
+
+logging.basicConfig(
+    level=numeric_level,
+    format="%(asctime)s [%(levelname)-8s] %(name)s - %(message)s",
+)
+
+# Set log level for all loggers (including structlog from gunn)
+logging.getLogger().setLevel(numeric_level)
+
+# Initialize structlog with the same log level
+from gunn.utils.telemetry import setup_logging as setup_structlog
+
+setup_structlog(log_level=log_level, enable_pii_redaction=False)
+
+# Suppress structlog debug logs specifically
+if numeric_level > logging.DEBUG:
+    # Structlog uses stdlib logger, so we need to set levels on specific loggers
+    for logger_name in ["gunn", "gunn.core", "gunn.policies", "gunn.utils"]:
+        logging.getLogger(logger_name).setLevel(numeric_level)
+
 logger = logging.getLogger(__name__)
 
 
@@ -1027,7 +1048,14 @@ class BattleAPIServer:
             await self.orchestrator._sync_world_state()
 
             # Check and update win condition
+            old_status = self.orchestrator.world_state.game_status
             self.orchestrator.world_state.update_game_status()
+
+            # If game just ended, log it (main loop will handle broadcast)
+            if old_status == "active" and self.orchestrator.world_state.game_status != "active":
+                logger.warning(
+                    f"[TICK] Game ended in this tick: {self.orchestrator.world_state.game_status}"
+                )
 
         except Exception as e:
             logger.error(f"Error processing game tick: {e}")

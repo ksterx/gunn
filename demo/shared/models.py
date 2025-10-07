@@ -292,4 +292,16 @@ class BattleWorldState(BaseModel):
 
     def update_game_status(self) -> None:
         """Update game status based on current conditions."""
+        old_status = self.game_status
         self.game_status = self.check_win_condition()
+
+        # Debug logging
+        if old_status != self.game_status:
+            import logging
+            logger = logging.getLogger(__name__)
+            team_a_alive = len(self.get_alive_agents("team_a"))
+            team_b_alive = len(self.get_alive_agents("team_b"))
+            logger.warning(
+                f"[GAME_STATUS] Status changed: {old_status} -> {self.game_status} "
+                f"(team_a_alive={team_a_alive}, team_b_alive={team_b_alive})"
+            )

@@ -360,7 +360,7 @@ def log_operation(
     elif status == "warning":
         logger.warning("Operation completed", **log_data)
     else:
-        logger.info("Operation completed", **log_data)
+        logger.debug("Operation completed", **log_data)
 
 
 class PerformanceTimer:

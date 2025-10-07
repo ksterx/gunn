@@ -40,6 +40,8 @@ class EffectProcessor:
             "Speak": self._handle_speak_effect,
             "Move": self._handle_agent_move,
             "Attack": self._handle_attack_effect,
+            "Heal": self._handle_heal_effect,  # Handle Heal intent as effect
+            "Repair": self._handle_repair_effect,  # Handle Repair intent as effect
             "AttackFailed": self._handle_attack_failed,
             "HealFailed": self._handle_heal_failed,
             "RepairFailed": self._handle_repair_failed,
@@ -186,13 +188,19 @@ class EffectProcessor:
         agent.health = max(0, int(new_health))
 
         self._logger.info(
-            f"Agent {target_id} damaged: {old_health} -> {agent.health} HP"
+            f"[DAMAGE] Agent {target_id} damaged: {old_health} -> {agent.health} HP (payload new_health={new_health})"
         )
 
         # If health reaches 0, agent should be marked as dead
         if agent.health == 0 and agent.status == AgentStatus.ALIVE:
             agent.status = AgentStatus.DEAD
-            self._logger.info(f"Agent {target_id} died from damage")
+            self._logger.warning(
+                f"[DEATH] Agent {target_id} died from damage (health={agent.health}, status={agent.status})"
+            )
+        elif agent.health == 0:
+            self._logger.warning(
+                f"[DEATH] Agent {target_id} already dead (health={agent.health}, status={agent.status})"
+            )
 
     async def _handle_agent_died(
         self, effect: dict[str, Any], world_state: BattleWorldState
@@ -221,13 +229,17 @@ class EffectProcessor:
         agent.status = AgentStatus.DEAD
         agent.health = 0
 
+        self._logger.warning(
+            f"[DEATH] Agent {agent_id} marked as DEAD (killer={killer_id})"
+        )
+
         # Update team scores (killer's team gets a point)
         if killer_id:
             killer = world_state.agents.get(killer_id)
             if killer:
                 world_state.team_scores[killer.team] += 1
                 self._logger.info(
-                    f"Agent {agent_id} killed by {killer_id}. "
+                    f"[SCORE] Agent {agent_id} killed by {killer_id}. "
                     f"Team {killer.team} score: {world_state.team_scores[killer.team]}"
                 )
             else:
@@ -536,6 +548,107 @@ class EffectProcessor:
 
         self._logger.debug(
             f"Processed Attack effect: attacker={attacker_id}, target={target_id}, "
+            f"resulting_effects={len(resulting_effects)}"
+        )
+
+    async def _handle_heal_effect(
+        self, effect: dict[str, Any], world_state: BattleWorldState
+    ) -> None:
+        """
+        Handle Heal effect by processing it through CombatManager.
+
+        Args:
+            effect: Heal effect
+            world_state: Current world state
+
+        Returns:
+            List of resulting effects (AgentHealed, HealFailed, etc.)
+        """
+        from .battle_mechanics import CombatManager
+
+        payload = effect.get("payload", {})
+        healer_id = effect.get("source_id") or payload.get("healer_id")
+        target_id = payload.get("target_id") or payload.get("target_agent_id")
+
+        self._logger.info(
+            f"[HEAL] Processing Heal effect: healer={healer_id}, target={target_id}"
+        )
+
+        if not healer_id or not target_id:
+            self._logger.warning(
+                f"Heal effect missing healer_id or target_id: {payload}"
+            )
+            return
+
+        # Process heal through battle mechanics
+        combat_manager = CombatManager()
+        resulting_effects = await combat_manager.process_heal(
+            healer_id, target_id, world_state
+        )
+
+        self._logger.info(
+            f"[HEAL] Generated {len(resulting_effects)} resulting effects: "
+            f"{[e.get('kind') for e in resulting_effects]}"
+        )
+
+        # Process resulting effects (AgentHealed, HealFailed, etc.)
+        for resulting_effect in resulting_effects:
+            effect_kind = resulting_effect.get("kind")
+            handler = self._effect_handlers.get(effect_kind)
+            if handler:
+                await handler(resulting_effect, world_state)
+            else:
+                self._logger.warning(f"No handler for effect kind: {effect_kind}")
+
+        self._logger.debug(
+            f"Processed Heal effect: healer={healer_id}, target={target_id}, "
+            f"resulting_effects={len(resulting_effects)}"
+        )
+
+    async def _handle_repair_effect(
+        self, effect: dict[str, Any], world_state: BattleWorldState
+    ) -> None:
+        """
+        Handle Repair effect by processing it through CombatManager.
+
+        Args:
+            effect: Repair effect
+            world_state: Current world state
+
+        Returns:
+            List of resulting effects (WeaponRepaired, RepairFailed, etc.)
+        """
+        from .battle_mechanics import CombatManager
+
+        payload = effect.get("payload", {})
+        agent_id = effect.get("source_id") or payload.get("agent_id")
+
+        self._logger.info(f"[REPAIR] Processing Repair effect: agent={agent_id}")
+
+        if not agent_id:
+            self._logger.warning(f"Repair effect missing agent_id: {payload}")
+            return
+
+        # Process repair through battle mechanics
+        combat_manager = CombatManager()
+        resulting_effects = await combat_manager.process_repair(agent_id, world_state)
+
+        self._logger.info(
+            f"[REPAIR] Generated {len(resulting_effects)} resulting effects: "
+            f"{[e.get('kind') for e in resulting_effects]}"
+        )
+
+        # Process resulting effects (WeaponRepaired, RepairFailed, etc.)
+        for resulting_effect in resulting_effects:
+            effect_kind = resulting_effect.get("kind")
+            handler = self._effect_handlers.get(effect_kind)
+            if handler:
+                await handler(resulting_effect, world_state)
+            else:
+                self._logger.warning(f"No handler for effect kind: {effect_kind}")
+
+        self._logger.debug(
+            f"Processed Repair effect: agent={agent_id}, "
             f"resulting_effects={len(resulting_effects)}"
         )
 

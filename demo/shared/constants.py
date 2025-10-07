@@ -10,7 +10,7 @@ from typing import Any
 # Game mechanics constants
 GAME_CONFIG: dict[str, Any] = {
     # Combat settings
-    "attack_damage": 25,
+    "attack_damage": 70,
     "heal_amount": 30,
     "weapon_degradation_rate": 0.1,
     "movement_speed": 5.0,
@@ -19,7 +19,7 @@ GAME_CONFIG: dict[str, Any] = {
     # Agent capabilities
     "default_health": 100,
     "communication_range": 50.0,
-    "vision_range": 90.0,
+    "vision_range": 180.0,
     "attack_range": 15.0,
     # Map settings
     "map_width": 200.0,
